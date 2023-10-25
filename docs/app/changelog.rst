@@ -18,6 +18,7 @@ Changed
 -------
 
 - Updated libloot to v0.22.2.
+- Updated Qt to v6.6.1.
 
 0.22.1 - 2023-11-05
 ===================
