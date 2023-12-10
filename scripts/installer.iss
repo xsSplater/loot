@@ -46,8 +46,8 @@ DisableDirPage=no
 DisableReadyPage=yes
 DisableProgramGroupPage=yes
 WizardStyle=modern
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64 arm64
+ArchitecturesInstallIn64BitMode=x64 arm64
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
