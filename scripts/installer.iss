@@ -48,6 +48,7 @@ DisableProgramGroupPage=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
+PrivilegesRequired=lowest
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
@@ -216,10 +217,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "{tmp}\vc_redist.2019.x64.exe"; Parameters: "/quiet /norestart"; Flags: skipifdoesntexist; StatusMsg: "{cm:InstallingMSVCRedist}"
-
-[Registry]
-; Store install path for backwards-compatibility with old NSIS install script behaviour.
-Root: HKLM; Subkey: "Software\LOOT"; ValueType: string; ValueName: "Installed Path"; ValueData: "{app}"; Flags: deletekey uninsdeletekey
 
 [UninstallDelete]
 Type: files; Name: "{localappdata}\{#MyAppName}\LOOTDebugLog.txt";
