@@ -55,13 +55,18 @@ public:
 
   void refreshMessages();
 
+protected:
+  void paintEvent(QPaintEvent* event) override;
+
 private:
   QLabel* nameLabel{new QLabel(this)};
   QLabel* crcLabel{new QLabel(this)};
   QLabel* versionLabel{new QLabel(this)};
   QLabel* isActiveLabel{new QLabel(this)};
   QLabel* masterFileLabel{new QLabel(this)};
+  QLabel* blueprintMasterLabel{new QLabel(this)};
   QLabel* lightPluginLabel{new QLabel(this)};
+  QLabel* mediumPluginLabel{new QLabel(this)};
   QLabel* emptyPluginLabel{new QLabel(this)};
   QLabel* loadsArchiveLabel{new QLabel(this)};
   QLabel* isCleanLabel{new QLabel(this)};

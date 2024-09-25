@@ -11,7 +11,7 @@ The menu bar consists of the File, Game, Plugin and Help menus. Some menus and m
 
 A few items in the menus are not self-explanatory:
 
-- "Redate Plugins..." is provided so that Skyrim and Skyrim Special Edition modders may set the load order for the Creation Kit. It is only available for Skyrim, and changes the timestamps of the plugins in its Data folder to match their current load order. A side effect of changing the timestamps is that any Steam Workshop mods installed will be re-downloaded.
+- "Redate Plugins…" is provided so that Skyrim and Skyrim Special Edition modders may set the load order for the Creation Kit. It is only available for Skyrim, and changes the timestamps of the plugins in its Data folder to match their current load order. A side effect of changing the timestamps is that any Steam Workshop mods installed will be re-downloaded.
 - "Copy Load Order" copies the displayed list of plugins and the decimal and hexadecimal indices of active plugins to the clipboard. The columns are:
 
   1. Decimal load order index
@@ -21,7 +21,7 @@ A few items in the menus are not self-explanatory:
 
 - "Copy Content" copies the data displayed in LOOT's cards to the clipboard as YAML-formatted text.
 - "Refresh Content" re-scans the installed plugins' headers and regenerates the content LOOT displays. This can be useful if you have made changes to your installed plugins while LOOT was open. Refreshing content will also discard any CRCs that were previously calculated, as they may have changed.
-- The "Search Cards..." option allows you to search all the visible text displayed on plugin cards, so the results may be affected by any filters you have active. Searching can optionally be done using case-insensitive Perl-like regular expressions instead of case-insensitive text comparison.
+- The "Search Cards…" option allows you to search all the visible text displayed on plugin cards, so the results may be affected by any filters you have active. Searching can optionally be done using case-insensitive Perl-like regular expressions instead of case-insensitive text comparison.
 
 The Toolbar
 ===========
@@ -54,20 +54,43 @@ Before a sorted load order is applied, LOOT saves a backup of the current load o
 Plugin Cards & Sidebar Items
 ============================
 
-Each plugin is displayed on its own "card", which displays all the information LOOT has for that plugin, and provides access to plugin-specific functionality, including editing its metadata. Each plugin also has an item in the sidebar's Plugins section. The sidebar item contains the plugin's listed position, name and an icon for plugins that have user metadata. It also displays the plugin's in-game load order index if the plugin is active, while light plugins have their light plugin index displayed. Clicking on a plugin's sidebar item will select it, so that the Plugin menu options operate on it. Double-clicking a plugin's sidebar item will jump to its card.
+Each plugin is displayed on its own "card", which displays all the information LOOT has for that plugin, and provides access to plugin-specific functionality, including editing its metadata. Each plugin also has an item in the sidebar's Plugins section. The sidebar item contains the plugin's listed position, name and an |has_user_metadata_icon| icon for plugins that have user metadata. It also displays the plugin's in-game load order index if the plugin is active, while light plugins have their light plugin index displayed. Clicking on a plugin's sidebar item will select it, so that the Plugin menu options operate on it. Double-clicking a plugin's sidebar item will jump to its card.
 
 The plugin card's header holds the following information, some of which is only displayed if applicable:
 
-- The "Active Plugin" icon.
 - The plugin name.
 - The plugin's version number, extracted from its description field.
 - The plugin's :abbr:`CRC (Cyclic Redundancy Checksum)`, which can be used to uniquely identify it. CRCs are only displayed after they have been calculated during overlap filtering or sorting, except the the CRC of the game's main master plugin, which is never displayed.
-- The "Master Plugin" icon.
-- The "Light Plugin" icon.
-- The "Empty Plugin" icon.
-- The "Loads Archive" icon.
-- The "Verified clean" icon.
-- The "Has User Metadata" icon.
+- The "Active Plugin" |active_plugin_icon| icon.
+- The "Master Plugin" |master_plugin_icon| icon.
+- The "Blueprint Master Plugin" |blueprint_master_plugin_icon| icon.
+- The "Light Plugin" |light_plugin_icon| icon or "Small Plugin" |small_plugin_icon| icon.
+- The "Medium Plugin" |medium_plugin_icon| icon.
+- The "Empty Plugin" |empty_plugin_icon| icon.
+- The "Loads Archive" |loads_archive_icon| icon.
+- The "Verified clean" |verified_clean_icon| icon.
+- The "Has User Metadata" |has_user_metadata_icon| icon.
+
+.. |active_plugin_icon| image:: ../../../resources/icons/material-icons/check_black_48dp.svg
+  :scale: 45%
+.. |master_plugin_icon| image:: ../../../resources/icons/crown.svg
+  :scale: 45%
+.. |blueprint_master_plugin_icon| image:: ../../../resources/icons/crown-blueprint.svg
+  :scale: 45%
+.. |light_plugin_icon| image:: ../../../resources/icons/feather.svg
+  :scale: 45%
+.. |small_plugin_icon| image:: ../../../resources/icons/small.svg
+  :scale: 45%
+.. |medium_plugin_icon| image:: ../../../resources/icons/medium.svg
+  :scale: 45%
+.. |empty_plugin_icon| image:: ../../../resources/icons/material-icons/visibility_off_black_48dp.svg
+  :scale: 45%
+.. |loads_archive_icon| image:: ../../../resources/icons/material-icons/attachment_black_48dp.svg
+  :scale: 45%
+.. |verified_clean_icon| image:: ../../../resources/icons/droplet.svg
+  :scale: 45%
+.. |has_user_metadata_icon| image:: ../../../resources/icons/material-icons/account_circle_black_48dp.svg
+  :scale: 45%
 
 Messages, Bash Tag suggestions and plugin sources are displayed below the plugin card's header.
 

@@ -94,12 +94,15 @@ public:
   void RedatePlugins();  // Change timestamps to match load order (Skyrim only).
 
   void LoadCreationClubPluginNames();
+  bool HadCreationClub() const;
   bool IsCreationClubPlugin(const std::string& name) const;
 
   void LoadAllInstalledPlugins(
       bool headersOnly);  // Loads all installed plugins.
   bool ArePluginsFullyLoaded()
       const;  // Checks if the game's plugins have already been loaded.
+  bool SupportsLightPlugins() const;
+  bool SupportsMediumPlugins() const;
 
   std::filesystem::path MasterlistPath() const;
   std::filesystem::path UserlistPath() const;
@@ -120,7 +123,8 @@ public:
   void IncrementLoadOrderSortCount();
   void DecrementLoadOrderSortCount();
 
-  std::vector<SourcedMessage> GetMessages(const std::string& language) const;
+  std::vector<SourcedMessage> GetMessages(const std::string& language,
+                                          bool warnOnCaseSensitivePaths) const;
   void AppendMessage(const SourcedMessage& message);
   void ClearMessages();
 
@@ -161,6 +165,7 @@ private:
   unsigned short loadOrderSortCount_{0};
   bool pluginsFullyLoaded_{false};
   bool isMicrosoftStoreInstall_{false};
+  bool supportsLightPlugins_{false};
 
   // Use Filename to benefit from libloot's case-insensitive comparisons.
   std::set<Filename> creationClubPlugins_;
@@ -186,7 +191,8 @@ std::vector<T> MapFromLoadOrderData(
   data.reserve(loadOrder.size());
 
   short numberOfActiveLightPlugins = 0;
-  short numberOfActiveNormalPlugins = 0;
+  short numberOfActiveMediumPlugins = 0;
+  short numberOfActiveFullPlugins = 0;
 
   // First get all the necessary data to call the mapper, as this is fast.
   for (const auto& pluginName : loadOrder) {
@@ -196,13 +202,19 @@ std::vector<T> MapFromLoadOrderData(
     }
 
     const auto isLight = plugin->IsLightPlugin();
-    const auto isOverride = plugin->IsOverridePlugin();
+    const auto isMedium = plugin->IsMediumPlugin();
     const auto isActive = game.IsPluginActive(pluginName);
 
-    const auto numberOfActivePlugins =
-        isLight ? numberOfActiveLightPlugins : numberOfActiveNormalPlugins;
+    short numberOfActivePlugins;
+    if (isLight) {
+      numberOfActivePlugins = numberOfActiveLightPlugins;
+    } else if (isMedium) {
+      numberOfActivePlugins = numberOfActiveMediumPlugins;
+    } else {
+      numberOfActivePlugins = numberOfActiveFullPlugins;
+    }
 
-    const auto activeLoadOrderIndex = isActive && !isOverride
+    const auto activeLoadOrderIndex = isActive
                                           ? std::optional(numberOfActivePlugins)
                                           : std::nullopt;
 
@@ -211,8 +223,10 @@ std::vector<T> MapFromLoadOrderData(
     if (isActive) {
       if (isLight) {
         ++numberOfActiveLightPlugins;
-      } else if (!isOverride) {
-        ++numberOfActiveNormalPlugins;
+      } else if (isMedium) {
+        ++numberOfActiveMediumPlugins;
+      } else {
+        ++numberOfActiveFullPlugins;
       }
     }
   }

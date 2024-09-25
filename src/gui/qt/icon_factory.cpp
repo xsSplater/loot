@@ -50,8 +50,18 @@ QIcon IconFactory::getIsActiveIcon() {
 
 QIcon IconFactory::getMasterFileIcon() { return getIcon(":/icons/crown.svg"); }
 
+QIcon IconFactory::getBlueprintMasterIcon() { return getIcon(":/icons/crown-blueprint.svg"); }
+
 QIcon IconFactory::getLightPluginIcon() {
-  return getIcon(":/icons/material-icons/light_mode_black_48dp.svg");
+  return getIcon(":/icons/feather.svg");
+}
+
+QIcon IconFactory::getSmallPluginIcon() {
+  return getIcon(":/icons/small.svg");
+}
+
+QIcon IconFactory::getMediumPluginIcon() {
+  return getIcon(":/icons/medium.svg");
 }
 
 QIcon IconFactory::getEmptyPluginIcon() {

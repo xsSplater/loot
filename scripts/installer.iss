@@ -1,25 +1,33 @@
-﻿; LOOT installer Inno Setup script.
+; LOOT installer Inno Setup script.
 ; This file must be encoded in UTF-8 WITH a BOM for Unicode text to
 ; be displayed correctly.
 
 #define MyAppName "LOOT"
-#define MyAppVersion "0.22.3"
+#define MyAppVersion "0.23.1"
 #define MyAppPublisher "LOOT Team"
 #define MyAppURL "https://loot.github.io"
 #define MyAppExeName "LOOT.exe"
 
 #define MasterlistBranch "v0.21"
 
-#if FileExists(AddBackslash(CompilerPath) + 'Languages\Korean.isl')
+#if FileExists(AddBackslash(SourcePath) + '..\build\inno\Korean.isl')
 #define KoreanExists
 #endif
 
-#if FileExists(AddBackslash(CompilerPath) + 'Languages\Swedish.isl')
+#if FileExists(AddBackslash(SourcePath) + '..\build\inno\Swedish.isl')
 #define SwedishExists
 #endif
 
-#if FileExists(AddBackslash(CompilerPath) + 'Languages\ChineseSimplified.isl')
+#if FileExists(AddBackslash(SourcePath) + '..\build\inno\ChineseSimplified.isl')
 #define SimplifiedChineseExists
+#endif
+
+#if FileExists(AddBackslash(SourcePath) + '..\build\Release\LOOT.exe')
+#define ArtifactsDir "build\Release"
+#define LiblootDll "loot.dll"
+#else
+#define ArtifactsDir "build"
+#define LiblootDll "libloot.dll"
 #endif
 
 [Setup]
@@ -46,33 +54,37 @@ DisableDirPage=no
 DisableReadyPage=yes
 DisableProgramGroupPage=yes
 WizardStyle=modern
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
+UsePreviousPrivileges=yes
 
 [Languages]
-Name: "en"; MessagesFile: "compiler:Default.isl"
-Name: "bg"; MessagesFile: "compiler:Languages\Bulgarian.isl"
-Name: "cs"; MessagesFile: "compiler:Languages\Czech.isl"
-Name: "da"; MessagesFile: "compiler:Languages\Danish.isl"
-Name: "de"; MessagesFile: "compiler:Languages\German.isl"
-Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "fi"; MessagesFile: "compiler:Languages\Finnish.isl"
-Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
-Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
-Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl,resources\l10n\en\LC_MESSAGES\installer.islu"
+Name: "bg"; MessagesFile: "compiler:Languages\Bulgarian.isl,resources\l10n\bg\LC_MESSAGES\installer.islu"
+Name: "cs"; MessagesFile: "compiler:Languages\Czech.isl,resources\l10n\cs\LC_MESSAGES\installer.islu"
+Name: "da"; MessagesFile: "compiler:Languages\Danish.isl,resources\l10n\da\LC_MESSAGES\installer.islu"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl,resources\l10n\de\LC_MESSAGES\installer.islu"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl,resources\l10n\es\LC_MESSAGES\installer.islu"
+Name: "fi"; MessagesFile: "compiler:Languages\Finnish.isl,resources\l10n\fi\LC_MESSAGES\installer.islu"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl,resources\l10n\fr\LC_MESSAGES\installer.islu"
+Name: "it"; MessagesFile: "compiler:Languages\Italian.isl,resources\l10n\it\LC_MESSAGES\installer.islu"
+Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl,resources\l10n\ja\LC_MESSAGES\installer.islu"
 #ifdef KoreanExists
-Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
+Name: "ko"; MessagesFile: "build\inno\Korean.isl,resources\l10n\ko\LC_MESSAGES\installer.islu"
 #endif
-Name: "pl"; MessagesFile: "compiler:Languages\Polish.isl"
-Name: "pt_BR"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
-Name: "pt_PT"; MessagesFile: "compiler:Languages\Portuguese.isl"
-Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
+Name: "pl"; MessagesFile: "compiler:Languages\Polish.isl,resources\l10n\pl\LC_MESSAGES\installer.islu"
+Name: "pt_BR"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl,resources\l10n\pt_BR\LC_MESSAGES\installer.islu"
+Name: "pt_PT"; MessagesFile: "compiler:Languages\Portuguese.isl,resources\l10n\pt_PT\LC_MESSAGES\installer.islu"
+Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl,resources\l10n\ru\LC_MESSAGES\installer.islu"
 #ifdef SwedishExists
-Name: "sv"; MessagesFile: "compiler:Languages\Swedish.isl"
+Name: "sv"; MessagesFile: "build\inno\Swedish.isl,resources\l10n\sv\LC_MESSAGES\installer.islu"
 #endif
-Name: "uk_UA"; MessagesFile: "compiler:Languages\Ukrainian.isl"
+Name: "tr_TR"; MessagesFile: "compiler:Languages\Turkish.isl,resources\l10n\tr_TR\LC_MESSAGES\installer.islu"
+Name: "uk_UA"; MessagesFile: "compiler:Languages\Ukrainian.isl,resources\l10n\uk_UA\LC_MESSAGES\installer.islu"
 #ifdef SimplifiedChineseExists
-Name: "zh_CN"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "zh_CN"; MessagesFile: "build\inno\ChineseSimplified.isl,resources\l10n\zh_CN\LC_MESSAGES\installer.islu"
 #endif
 
 [Tasks]
@@ -80,38 +92,42 @@ Name: "masterlists"; Description: "{cm:DownloadMasterlists}"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "build\Release\LOOT.exe"; \
+Source: "{#ArtifactsDir}\LOOT.exe"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\loot.dll"; \
+Source: "{#ArtifactsDir}\{#LiblootDll}"; \
 DestDir: "{app}"; Flags: ignoreversion
 
+#if FileExists(AddBackslash(SourcePath) + '..\' + AddBackslash(ArtifactsDir) + 'Qt6Core.dll')
+  
 ; Common Qt files
-Source: "build\Release\iconengines\*"; \
+Source: "{#ArtifactsDir}\iconengines\*"; \
 DestDir: "{app}\iconengines"; Flags: ignoreversion
-Source: "build\Release\imageformats\*"; \
+Source: "{#ArtifactsDir}\imageformats\*"; \
 DestDir: "{app}\imageformats"; Flags: ignoreversion
-Source: "build\Release\platforms\*"; \
+Source: "{#ArtifactsDir}\platforms\*"; \
 DestDir: "{app}\platforms"; Flags: ignoreversion
-Source: "build\Release\styles\*"; \
+Source: "{#ArtifactsDir}\styles\*"; \
 DestDir: "{app}\styles"; Flags: ignoreversion
-Source: "build\Release\translations\*"; \
+Source: "{#ArtifactsDir}\translations\*"; \
 DestDir: "{app}\translations"; Flags: ignoreversion
 
 ; Qt 6 files
-Source: "build\Release\Qt6Core.dll"; \
+Source: "{#ArtifactsDir}\Qt6Core.dll"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\Qt6Gui.dll"; \
+Source: "{#ArtifactsDir}\Qt6Gui.dll"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\Qt6Network.dll"; \
+Source: "{#ArtifactsDir}\Qt6Network.dll"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\Qt6Svg.dll"; \
+Source: "{#ArtifactsDir}\Qt6Svg.dll"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\Qt6Widgets.dll"; \
+Source: "{#ArtifactsDir}\Qt6Widgets.dll"; \
 DestDir: "{app}"; Flags: ignoreversion
-Source: "build\Release\networkinformation\*"; \
+Source: "{#ArtifactsDir}\networkinformation\*"; \
 DestDir: "{app}\networkinformation"; Flags: ignoreversion
-Source: "build\Release\tls\*"; \
+Source: "{#ArtifactsDir}\tls\*"; \
 DestDir: "{app}\tls"; Flags: ignoreversion
+
+#endif
 
 Source: "build\docs\html\*"; \
 DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs
@@ -146,6 +162,8 @@ Source: "resources\l10n\ru\LC_MESSAGES\loot.mo"; \
 DestDir: "{app}\resources\l10n\ru\LC_MESSAGES"; Flags: ignoreversion
 Source: "resources\l10n\sv\LC_MESSAGES\loot.mo"; \
 DestDir: "{app}\resources\l10n\sv\LC_MESSAGES"; Flags: ignoreversion
+Source: "resources\l10n\tr_TR\LC_MESSAGES\loot.mo"; \
+DestDir: "{app}\resources\l10n\tr_TR\LC_MESSAGES"; Flags: ignoreversion
 Source: "resources\l10n\uk_UA\LC_MESSAGES\loot.mo"; \
 DestDir: "{app}\resources\l10n\uk_UA\LC_MESSAGES"; Flags: ignoreversion
 Source: "resources\l10n\zh_CN\LC_MESSAGES\loot.mo"; \
@@ -216,10 +234,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 Filename: "{tmp}\vc_redist.2019.x64.exe"; Parameters: "/quiet /norestart"; Flags: skipifdoesntexist; StatusMsg: "{cm:InstallingMSVCRedist}"
-
-[Registry]
-; Store install path for backwards-compatibility with old NSIS install script behaviour.
-Root: HKLM; Subkey: "Software\LOOT"; ValueType: string; ValueName: "Installed Path"; ValueData: "{app}"; Flags: deletekey uninsdeletekey
 
 [UninstallDelete]
 Type: files; Name: "{localappdata}\{#MyAppName}\LOOTDebugLog.txt";
@@ -292,50 +306,6 @@ Type: dirifempty; Name: "{app}\tls";
 Type: dirifempty; Name: "{app}\translations";
 Type: dirifempty; Name: "{app}";
 
-[CustomMessages]
-en.DeleteUserFiles=Do you want to delete your settings and user metadata?
-bg.DeleteUserFiles=Искате ли да изтриете Вашите настройки и потребителските метаданни?
-cs.DeleteUserFiles=Vymazat Uživatelské Soubory
-da.DeleteUserFiles=Ønsker du at slette dine indstillinger og bruger metadata?
-de.DeleteUserFiles=Möchten Sie Ihre Einstellungen und Benutzer-Metadaten löschen?
-es.DeleteUserFiles=¿Desea borrar sus ajustes y metadatos de usuario?
-fi.DeleteUserFiles=Haluatko poistaa asetukset ja paikallisesti muokatut metatiedot?
-fr.DeleteUserFiles=Voulez-vous supprimer vos paramètres et les métadonnées de l'utilisateur?
-it.DeleteUserFiles=Vuoi cancellare le tue impostazioni e i meta-dati utente?
-ja.DeleteUserFiles=設定とユーザーメタデータを削除しますか？
-#ifdef KoreanExists
-ko.DeleteUserFiles=당신은 당신의 설정과 사용자 메타 데이터를 삭제 하시겠습니까?
-#endif
-pl.DeleteUserFiles=Czy chcesz usunąć swoje ustawienia i metadane użytkownika?
-pt_BR.DeleteUserFiles=Você quer deletar suas configurações e dados de usuário?
-pt_PT.DeleteUserFiles=Deseja apagar as suas configurações e metadados de utilizador?
-ru.DeleteUserFiles=Вы хотите удалить ваши настройки и метаданные пользователя?
-;#ifdef SwedishExists
-;sv.DeleteUserFiles=
-;#endif
-uk_UA.DeleteUserFiles=Чи ви хочете видалити ваші налаштування та метадані користувача?
-#ifdef SimplifiedChineseExists
-zh_CN.DeleteUserFiles=你想要删除你的设置和用户数据吗？
-#endif
-
-en.InstallingMSVCRedist=Installing Visual C++ 2019 Redistributable...
-bg.InstallingMSVCRedist=Инсталиране на „Visual C++ 2019 Redistributable“...
-de.InstallingMSVCRedist=Installiere Visual C++ 2019 Redistributable...
-fi.InstallingMSVCRedist=Asennetaan Visual C++ 2019 Redistributable...
-it.InstallingMSVCRedist=Installazione di Visual C++ 2019 Redistributable...
-ja.InstallingMSVCRedist=Visual C++ 2019 再頒布可能パッケージをインストール中...
-pl.InstallingMSVCRedist=Instalowanie dystrybucji Visual C++ 2019...
-uk_UA.InstallingMSVCRedist=Встановлюємо Visual C++ 2019 Redistributable...
-
-en.DownloadMasterlists=Download and install the latest masterlists
-bg.DownloadMasterlists=Изтегляне и инсталиране на най-новите основни списъци
-de.DownloadMasterlists=Lade und installiere die aktuellen Masterlisten
-fi.DownloadMasterlists=Lataa ja asenna uusimmat pääluettelot
-it.DownloadMasterlists=Scarica e installa le ultime Masterlist
-ja.DownloadMasterlists=最新のマスターリストをダウンロード・インストールする
-pl.DownloadMasterlists=Ściągnij i zainstaluj ostatnią listę główną
-uk_UA.DownloadMasterlists=Завантажити та встановити останні правила сортування
-
 [Code]
 var DownloadPage: TDownloadWizardPage;
 var VC2019RedistNeedsInstall: Boolean;
@@ -359,7 +329,7 @@ begin
       for I := 0 to GetArrayLength(Lines) - 1 do begin
         if Copy(Lines[I], 0, Length(SearchLineStart)) = SearchLineStart then begin
           Lines[I] := LanguageLine;
-          SaveStringsToFile(File, Lines, False)
+          SaveStringsToUTF8FileWithoutBOM(File, Lines, False)
           Break;
         end;
       end;
@@ -383,16 +353,20 @@ begin
   // backwards-compatible key because the filename of the  uninstaller created
   // by Inno Setup can vary.
   RegKey := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{#emit SetupSetting("AppId")}_is1');
-  if RegQueryStringValue(HKLM, RegKey, 'UninstallString', RegValue) then begin
-      Exec(RemoveQuotes(RegValue), '/VERYSILENT', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  // Now try using the backwards-compatible Registry key, and run the NSIS
-  // uninstaller, which has a fixed filename.
+  if RegQueryStringValue(HKCU, RegKey, 'UninstallString', RegValue) then begin
+    Log('Got uninstall string from HKCU registry entry');
+    Exec(RemoveQuotes(RegValue), '/VERYSILENT', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end
-  else begin
-    if RegQueryStringValue(HKLM, 'Software\LOOT', 'Installed Path', RegValue) then begin
-      Exec(RegValue + '\Uninstall.exe', '/S', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    end;
-  end;
+  else if RegQueryStringValue(HKLM, RegKey, 'UninstallString', RegValue) then begin
+    Log('Got uninstall string from HKLM registry entry');
+    Exec(RemoveQuotes(RegValue), '/VERYSILENT', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end
+  else if RegQueryStringValue(HKLM, 'Software\LOOT', 'Installed Path', RegValue) then begin
+    Log('Got uninstall string from the legacy NSIS installer HKLM registry entry');
+    Exec(RegValue + '\Uninstall.exe', '/S', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end
+  else
+    Log('Did not find an uninstaller for any previously-installed version of LOOT.');
 end;
 
 function VCRedistNeedsInstall(VersionMajor, VersionMinor, VersionBld: Cardinal): Boolean;

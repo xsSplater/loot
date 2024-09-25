@@ -25,6 +25,8 @@
 
 #include "gui/qt/tasks/tasks.h"
 
+#include <QtConcurrent/QtConcurrent>
+
 namespace loot {
 QueryTask::QueryTask(std::unique_ptr<Query> query) : query(std::move(query)) {}
 
@@ -50,136 +52,93 @@ void QueryTask::execute() {
   }
 }
 
-TaskExecutor::TaskExecutor(QObject *parent) : QObject(parent) {}
+QFuture<QueryResult> executeBackgroundQuery(std::unique_ptr<Query> query) {
+  const auto sharedQuery = std::shared_ptr<Query>(std::move(query));
 
-SequentialTaskExecutor::SequentialTaskExecutor(QObject *parent,
-                                               std::vector<Task *> tasks) :
-    TaskExecutor(parent), tasks(tasks) {
-  // Move all the tasks to the worker thread.
+  return QtConcurrent::run([sharedQuery]() {
+    if (sharedQuery == nullptr) {
+      throw std::runtime_error(
+          "Attempted to execute a query with no query set!");
+    }
+
+    try {
+      return sharedQuery->executeLogic();
+    } catch (const std::exception &e) {
+      const auto logger = getLogger();
+      if (logger) {
+        logger->error("Exception while executing query: {}", e.what());
+      }
+
+      const auto errorMessage = sharedQuery == nullptr
+                                    ? std::string(e.what())
+                                    : sharedQuery->getErrorMessage();
+
+      throw std::runtime_error(errorMessage.c_str());
+    }
+  });
+}
+
+QFuture<QueryResult> taskFuture(Task *task) {
+  QFuture<QueryResult> taskFinishedFuture =
+      QtFuture::connect(task, &Task::finished);
+  QFuture<std::string> taskErrorFuture = QtFuture::connect(task, &Task::error);
+
+  return QtFuture::whenAny(taskFinishedFuture, taskErrorFuture)
+      .then(
+          [](std::variant<QFuture<QueryResult>, QFuture<std::string>> variant) {
+            if (std::holds_alternative<QFuture<QueryResult>>(variant)) {
+              return std::get<QFuture<QueryResult>>(variant).result();
+            } else {
+              throw std::runtime_error(
+                  std::get<QFuture<std::string>>(variant).result().c_str());
+            }
+          });
+}
+
+QFuture<QList<QFuture<QueryResult>>> whenAllTasks(
+    const std::vector<Task *> &tasks) {
+  std::vector<QFuture<QueryResult>> futures;
+  for (const auto task : tasks) {
+    futures.push_back(taskFuture(task));
+  }
+
+  return QtFuture::whenAll(futures.begin(), futures.end());
+}
+
+void executeConcurrentBackgroundTasks(const std::vector<Task *> &tasks,
+                                      QFuture<void> whenAll) {
+  QThread *workerThread = new QThread();
+
+  QObject::connect(
+      workerThread, &QThread::finished, workerThread, &QObject::deleteLater);
+
+  whenAll.then(workerThread, [workerThread]() { workerThread->quit(); });
+
+  workerThread->start();
+
   for (auto task : tasks) {
-    task->moveToThread(&workerThread);
-    connect(&workerThread, &QThread::finished, task, &QObject::deleteLater);
-    connect(
-        task, &Task::finished, this, &SequentialTaskExecutor::onTaskFinished);
-    connect(task, &Task::error, this, &SequentialTaskExecutor::onTaskError);
-  }
-
-  connect(&workerThread,
-          &QThread::finished,
-          this,
-          &SequentialTaskExecutor::onWorkerThreadFinished);
-
-  if (!tasks.empty()) {
-    auto firstTask = tasks.at(currentTask);
-    connect(this, &TaskExecutor::start, firstTask, &Task::execute);
-  }
-
-  workerThread.setObjectName("workerThread");
-  workerThread.start();
-}
-
-SequentialTaskExecutor::~SequentialTaskExecutor() {
-  workerThread.quit();
-  workerThread.wait();
-}
-
-void SequentialTaskExecutor::onTaskFinished(QueryResult result) {
-  taskResults.push_back(result);
-
-  auto task = qobject_cast<Task *>(sender());
-
-  // Disconnect the finished task from the start signal so that it doesn't
-  // get restarted when the start signal is next sent.
-  disconnect(this, &TaskExecutor::start, task, &Task::execute);
-
-  // If there are more tasks remaining, connect the start signal to the next
-  // task's execute slot.
-  currentTask += 1;
-
-  if (currentTask >= tasks.size()) {
-    workerThread.quit();
-    return;
-  }
-
-  connect(this, &TaskExecutor::start, tasks.at(currentTask), &Task::execute);
-
-  // Now start the next task.
-  emit start();
-}
-
-void SequentialTaskExecutor::onTaskError() { workerThread.quit(); }
-
-void SequentialTaskExecutor::onWorkerThreadFinished() {
-  tasks.clear();
-
-  emit finished(taskResults);
-}
-
-ParallelTaskExecutor::ParallelTaskExecutor(QObject *parent,
-                                           std::vector<Task *> tasks) :
-    TaskExecutor(parent), tasks(tasks) {
-  if (tasks.empty()) {
-    throw std::invalid_argument("Tasks must not be empty");
-  }
-
-  // Create a worker thread for each task.
-  for (auto task : tasks) {
-    const auto workerThread = new QThread(this);
     task->moveToThread(workerThread);
 
-    workerThreads.push_back(workerThread);
-
-    connect(this, &TaskExecutor::start, task, &Task::execute);
-    connect(task, &Task::finished, this, &ParallelTaskExecutor::onTaskFinished);
-    connect(task, &Task::error, this, &ParallelTaskExecutor::onTaskError);
-
-    connect(workerThread, &QThread::finished, task, &QObject::deleteLater);
-    connect(workerThread,
-            &QThread::finished,
-            this,
-            &ParallelTaskExecutor::onWorkerThreadFinished);
-
-    workerThread->setObjectName("workerThread");
-    workerThread->start();
+    QMetaObject::invokeMethod(task, "execute", Qt::QueuedConnection);
   }
 }
 
-ParallelTaskExecutor::~ParallelTaskExecutor() {
-  for (auto &workerThread : workerThreads) {
-    workerThread->quit();
-    workerThread->wait();
-  }
-}
+QFuture<QueryResult> executeBackgroundTask(Task *task) {
+  QThread *workerThread = new QThread();
 
-void ParallelTaskExecutor::onTaskFinished(QueryResult result) {
-  std::lock_guard guard(mutex);
+  QObject::connect(
+      workerThread, &QThread::finished, workerThread, &QObject::deleteLater);
 
-  taskResults.push_back(result);
+  workerThread->start();
 
-  const auto task = qobject_cast<Task *>(sender());
+  task->moveToThread(workerThread);
 
-  task->thread()->quit();
-}
+  QMetaObject::invokeMethod(task, "execute", Qt::QueuedConnection);
 
-void ParallelTaskExecutor::onTaskError() {
-  const auto task = qobject_cast<Task *>(sender());
-
-  task->thread()->quit();
-}
-
-void ParallelTaskExecutor::onWorkerThreadFinished() {
-  for (auto &workerThread : workerThreads) {
-    if (workerThread->isRunning()) {
-      return;
-    }
-  }
-
-  std::lock_guard guard(mutex);
-
-  if (!tasks.empty()) {
-    tasks.clear();
-
-    emit finished(taskResults);
-  }
+  return taskFuture(task).then(workerThread,
+                               [workerThread](QueryResult result) {
+                                 workerThread->quit();
+                                 return result;
+                               });
 }
 }

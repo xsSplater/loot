@@ -40,7 +40,7 @@ enum struct MessageSource : unsigned int {
   inactiveMaster,
   lightPluginRequiresNonMaster,
   invalidLightPlugin,
-  invalidOverridePlugin,
+  invalidUpdatePlugin,
   invalidHeaderVersion,
   missingGroup,
   bashTagsOverride,
@@ -51,7 +51,11 @@ enum struct MessageSource : unsigned int {
   unsortedLoadOrderCheck,
   activePluginsCountCheck,
   removedPluginsCheck,
-  caseSensitivePathCheck
+  caseSensitivePathCheck,
+  selfMaster,
+  lightPluginNotSupported,
+  invalidMediumPlugin,
+  blueprintMasterMaster,
 };
 
 struct SourcedMessage {

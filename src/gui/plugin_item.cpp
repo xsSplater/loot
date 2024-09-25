@@ -25,7 +25,7 @@
 
 #include "gui/plugin_item.h"
 
-#include <spdlog/fmt/fmt.h>
+#include <fmt/base.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/locale.hpp>
@@ -123,11 +123,13 @@ std::pair<PluginMetadata, std::vector<SourcedMessage>> evaluateMetadata(
   return {metadata, evalErrors};
 }
 
-PluginItem::PluginItem(const PluginInterface& plugin,
+PluginItem::PluginItem(GameId gameId,
+                       const PluginInterface& plugin,
                        const gui::Game& game,
                        const std::optional<short>& loadOrderIndex,
                        const bool isActive,
                        std::string language) :
+    gameId(gameId),
     name(plugin.GetName()),
     loadOrderIndex(loadOrderIndex),
     crc(plugin.GetCRC()),
@@ -135,8 +137,9 @@ PluginItem::PluginItem(const PluginInterface& plugin,
     isActive(isActive),
     isEmpty(plugin.IsEmpty()),
     isMaster(plugin.IsMaster()),
+    isBlueprintMaster(plugin.IsMaster() && plugin.IsBlueprintPlugin()),
     isLightPlugin(plugin.IsLightPlugin()),
-    isOverridePlugin(plugin.IsOverridePlugin()),
+    isMediumPlugin(plugin.IsMediumPlugin()),
     loadsArchive(plugin.LoadsArchive()),
     isCreationClubPlugin(game.IsCreationClubPlugin(plugin.GetName())) {
   auto userMetadata = game.GetUserMetadata(plugin.GetName());
@@ -364,8 +367,20 @@ std::string PluginItem::getMarkdownContent() const {
     attributes.push_back("Master Plugin");
   }
 
+  if (isBlueprintMaster) {
+    attributes.push_back("Blueprint Master Plugin");
+  }
+
   if (isLightPlugin) {
-    attributes.push_back("Light Plugin");
+    if (gameId == GameId::starfield) {
+      attributes.push_back("Small Plugin");
+    } else {
+      attributes.push_back("Light Plugin");
+    }
+  }
+
+  if (isMediumPlugin) {
+    attributes.push_back("Medium Plugin");
   }
 
   if (loadsArchive) {
@@ -424,7 +439,14 @@ std::string PluginItem::getMarkdownContent() const {
 
 std::string PluginItem::loadOrderIndexText() const {
   if (loadOrderIndex.has_value()) {
-    auto formatString = isLightPlugin ? "FE {:03X}" : "{:02X}";
+    std::string formatString;
+    if (isLightPlugin) {
+      formatString = "FE {:03X}";
+    } else if (isMediumPlugin) {
+      formatString = "FD {:02X}";
+    } else {
+      formatString = "{:02X}";
+    }
 
     return fmt::format(formatString, loadOrderIndex.value());
   } else {
@@ -441,7 +463,12 @@ std::vector<PluginItem> GetPluginItems(
       mapper = [&](const PluginInterface* const plugin,
                    std::optional<short> loadOrderIndex,
                    bool isActive) {
-        return PluginItem(*plugin, game, loadOrderIndex, isActive, language);
+        return PluginItem(game.GetSettings().Id(),
+                          *plugin,
+                          game,
+                          loadOrderIndex,
+                          isActive,
+                          language);
       };
 
   return MapFromLoadOrderData(game, pluginNames, mapper);

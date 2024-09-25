@@ -13,6 +13,10 @@
   <name>LOOT</name>
   <summary>Modding utility for Starfield and some Elder Scrolls and Fallout games</summary>
 
+  <developer id="io.github.loot">
+    <name>The LOOT Team</name>
+  </developer>
+
   <metadata_license>FSFAP</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
 
@@ -65,6 +69,39 @@
   </screenshots>
 
   <releases>
+    <release version="0.23.1" date="2024-08-25">
+      <description>
+        <ul>
+          <li>Fixed an "Ambiguous load order detected" warning being shown following Starfield's August update.</li>
+          <li>Other fixes and improvements.</li>
+        </ul>
+      </description>
+      <url>https://loot.readthedocs.io/en/0.23.1/app/changelog.html#id1</url>
+    </release>
+    <release version="0.23.0" date="2024-07-10">
+      <description>
+        <ul>
+          <li>Re-enabled sorting for Starfield.</li>
+          <li>Added support for Starfield's medium plugin type.</li>
+          <li>Various updates to reflect changes in Starfield's behaviour.</li>
+          <li>Added a Turkish translation.</li>
+          <li>Other fixes and improvements.</li>
+        </ul>
+      </description>
+      <url>https://loot.readthedocs.io/en/0.23.0/app/changelog.html#id1</url>
+    </release>
+    <release version="0.22.4" date="2024-05-17">
+      <description>
+        <ul>
+          <li>Support for Fallout 4 from the Epic Games Store.</li>
+          <li>Better handling of light plugins in Fallout 4 VR and Skyrim VR.</li>
+          <li>LOOT no longer crashes if masterlist update fails to first update the prelude.</li>
+          <li>The Flatpak application is now built from source.</li>
+          <li>Other fixes and improvements.</li>
+        </ul>
+      </description>
+      <url>https://loot.readthedocs.io/en/0.22.4/app/changelog.html#id1</url>
+    </release>
     <release version="0.22.3" date="2023-12-06">
       <description>
         <ul>

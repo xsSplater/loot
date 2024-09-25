@@ -89,14 +89,19 @@ SizeHintCacheKey getSizeHintCacheKey(const QModelIndex& index) {
     const auto fourthColumnString = QString::number(counters.totalMessages);
     const auto sixthColumnString = QString::number(counters.totalPlugins);
 
-    const auto supportsLightPlugins =
-        generalInfo.gameSupportsLightPlugins ? "true" : "false";
+    auto pluginTypeRowCount = 1;
+    if (generalInfo.gameSupportsMediumPlugins) {
+      pluginTypeRowCount += 1;
+    }
+    if (generalInfo.gameSupportsLightPlugins) {
+      pluginTypeRowCount += 1;
+    }
 
     return SizeHintCacheKey(secondColumnString,
                             fourthColumnString,
                             sixthColumnString,
                             getMessageTexts(generalInfo.generalMessages),
-                            {supportsLightPlugins},
+                            {std::to_string(pluginTypeRowCount)},
                             true);
   } else {
     auto pluginItem = index.data(RawDataRole).value<PluginItem>();
@@ -126,12 +131,14 @@ GeneralInfoCard* setGeneralInfoCardContent(GeneralInfoCard* card,
   auto counters = index.data(CountersRole).value<GeneralInformationCounters>();
 
   card->setShowSeparateLightPluginCount(generalInfo.gameSupportsLightPlugins);
+  card->setShowSeparateMediumPluginCount(generalInfo.gameSupportsMediumPlugins);
   card->setMasterlistInfo(generalInfo.masterlistRevision);
   card->setPreludeInfo(generalInfo.preludeRevision);
   card->setMessageCounts(
       counters.warnings, counters.errors, counters.totalMessages);
   card->setPluginCounts(counters.activeLight,
-                        counters.activeRegular,
+                        counters.activeMedium,
+                        counters.activeFull,
                         counters.dirty,
                         counters.totalPlugins);
   card->setGeneralMessages(generalInfo.generalMessages);
@@ -175,7 +182,7 @@ QSize calculateSize(const QWidget* card,
    * calculate how much it should be possible to horizontally scroll the
    * viewport by (which it does using the largest width it's given).
    *
-   * The largest minumum width is needed because text wrapping means that the
+   * The largest minimum width is needed because text wrapping means that the
    * card's height depends on its width, and all cards must have the same
    * width, so when the viewport is narrow enough that scroll bars appear, all
    * cards must continue to have the same width even out-of-view, which means

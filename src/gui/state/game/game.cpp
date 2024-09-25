@@ -46,8 +46,7 @@
 #include <windows.h>
 #endif
 
-#include <spdlog/fmt/bundled/ranges.h>
-#include <spdlog/fmt/fmt.h>
+#include <fmt/ranges.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/locale.hpp>
@@ -59,6 +58,7 @@
 #include "gui/state/game/helpers.h"
 #include "gui/state/logging.h"
 #include "gui/state/loot_paths.h"
+#include "loot/exception/error_categories.h"
 #include "loot/exception/file_access_error.h"
 #include "loot/exception/undefined_group_error.h"
 
@@ -72,8 +72,9 @@ namespace {
 using loot::GameType;
 
 struct Counters {
-  size_t activeNormal = 0;
+  size_t activeFullPlugins = 0;
   size_t activeLightPlugins = 0;
+  size_t activeMediumPlugins = 0;
 };
 
 std::filesystem::path GetLOOTGamePath(const std::filesystem::path& lootDataPath,
@@ -238,10 +239,15 @@ std::string GetLoadOrderAsTextTable(const gui::Game& game,
       stream << "254 FE " << std::setw(3) << std::hex
              << counters.activeLightPlugins << std::dec << " ";
       counters.activeLightPlugins += 1;
-    } else if (isActive && !plugin->IsOverridePlugin()) {
-      stream << std::setw(3) << counters.activeNormal << " " << std::hex
-             << std::setw(2) << counters.activeNormal << std::dec << "     ";
-      counters.activeNormal += 1;
+    } else if (isActive && plugin->IsMediumPlugin()) {
+      stream << "253 FD " << std::setw(2) << std::hex
+             << counters.activeMediumPlugins << std::dec << " ";
+      counters.activeMediumPlugins += 1;
+    } else if (isActive) {
+      stream << std::setw(3) << counters.activeFullPlugins << " " << std::hex
+             << std::setw(2) << counters.activeFullPlugins << std::dec
+             << "     ";
+      counters.activeFullPlugins += 1;
     } else {
       stream << "           ";
     }
@@ -277,6 +283,72 @@ std::string GetMetadataAsBBCodeYaml(const gui::Game& game,
   return "[spoiler][code]\n" + metadata.AsYaml() + "\n[/code][/spoiler]";
 }
 
+bool SupportsLightPlugins(const gui::Game& game) {
+  const auto gameType = game.GetSettings().Type();
+  if (gameType == GameType::tes5vr) {
+    // Light plugins are not supported unless an SKSEVR plugin is used.
+    // This assumes that the plugin's dependencies are also installed and that
+    // the game is launched with SKSEVR. The dependencies are intentionally
+    // not checked to allow them to change over time without breaking this
+    // check.
+    return std::filesystem::exists(game.GetSettings().DataPath() / "SKSE" /
+                                   "Plugins" / "skyrimvresl.dll");
+  }
+
+  return gameType == GameType::tes5se || gameType == GameType::fo4 ||
+         gameType == GameType::starfield;
+}
+
+// This overload does not support checking based on the installed game.
+bool SupportsLightPlugins(const GameType gameType) {
+  return gameType == GameType::tes5se || gameType == GameType::fo4 ||
+         gameType == GameType::starfield;
+}
+
+void WriteStarfieldCCCFile(const GameSettings& settings) {
+  if (settings.Id() != GameId::starfield) {
+    return;
+  }
+
+  const auto logger = getLogger();
+
+  // Pass false for isMicrosoftStoreInstall, it doesn't matter for Starfield.
+  const auto externalDataPaths = GetExternalDataPaths(
+      settings.Id(), false, settings.DataPath(), settings.GameLocalPath());
+
+  const auto cccFilename = GetCCCFilename(settings.Type()).value();
+
+  const auto cccFilePath = externalDataPaths.at(0).parent_path() / cccFilename;
+
+  if (logger) {
+    logger->debug("Writing official plugins to CCC file at {}",
+                  cccFilePath.u8string());
+  }
+
+  std::ofstream out(cccFilePath, std::ios_base::out | std::ios_base::trunc);
+  if (out.fail()) {
+    throw FileAccessError("Couldn't open Starfield CCC file.");
+  }
+
+  // Write out the official plugins so that they have fixed load order
+  // positions, as otherwise LOOT might sort them into an order that would get
+  // written to plugins.txt and then overwritten on the next game load. This
+  // list is the same as what is used by Mod Organizer 2:
+  // <https://github.com/ModOrganizer2/modorganizer-game_bethesda/blob/master/src/games/starfield/src/gamestarfield.cpp#L256>
+  // with SFBGS004.esm appended (as it's missing from that list at time of
+  // writing).
+  out << "Starfield.esm" << std::endl
+      << "Constellation.esm" << std::endl
+      << "OldMars.esm" << std::endl
+      << "BlueprintShips-Starfield.esm" << std::endl
+      << "SFBGS007.esm" << std::endl
+      << "SFBGS008.esm" << std::endl
+      << "SFBGS006.esm" << std::endl
+      << "SFBGS003.esm" << std::endl
+      << "SFBGS004.esm" << std::endl;
+  out.close();
+}
+
 namespace gui {
 std::string GetDisplayName(const File& file) {
   if (file.GetDisplayName().empty()) {
@@ -293,7 +365,8 @@ Game::Game(const GameSettings& gameSettings,
     lootDataPath_(lootDataPath),
     preludePath_(preludePath),
     isMicrosoftStoreInstall_(
-        generic::IsMicrosoftInstall(settings_.Id(), settings_.GamePath())) {}
+        generic::IsMicrosoftInstall(settings_.Id(), settings_.GamePath())),
+    supportsLightPlugins_(loot::SupportsLightPlugins(settings_.Type())) {}
 
 Game::Game(Game&& game) {
   settings_ = std::move(game.settings_);
@@ -304,6 +377,7 @@ Game::Game(Game&& game) {
   loadOrderSortCount_ = std::move(game.loadOrderSortCount_);
   pluginsFullyLoaded_ = std::move(game.pluginsFullyLoaded_);
   isMicrosoftStoreInstall_ = std::move(game.isMicrosoftStoreInstall_);
+  supportsLightPlugins_ = std::move(game.supportsLightPlugins_);
 }
 
 Game& Game::operator=(Game&& game) {
@@ -316,6 +390,7 @@ Game& Game::operator=(Game&& game) {
     loadOrderSortCount_ = std::move(game.loadOrderSortCount_);
     pluginsFullyLoaded_ = std::move(game.pluginsFullyLoaded_);
     isMicrosoftStoreInstall_ = std::move(game.isMicrosoftStoreInstall_);
+    supportsLightPlugins_ = std::move(game.supportsLightPlugins_);
   }
 
   return *this;
@@ -336,12 +411,17 @@ void Game::Init() {
   messages_.clear();
   loadOrderSortCount_ = 0;
   pluginsFullyLoaded_ = false;
+  supportsLightPlugins_ = loot::SupportsLightPlugins(*this);
 
   gameHandle_ = CreateGameHandle(
       settings_.Type(), settings_.GamePath(), settings_.GameLocalPath());
   gameHandle_->IdentifyMainMasterFile(settings_.Master());
 
   InitLootGameFolder(lootDataPath_, settings_);
+
+  if (settings_.Id() == GameId::starfield) {
+    WriteStarfieldCCCFile(settings_);
+  }
 }
 
 bool Game::IsInitialised() const { return gameHandle_ != nullptr; }
@@ -366,6 +446,24 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
         plugin.GetName());
   }
   std::vector<SourcedMessage> messages;
+
+  const auto handleMissingMaster = [&](const std::string& master,
+                                       MessageType messageType) {
+    if (logger) {
+      logger->error("\"{}\" requires \"{}\", but it is missing.",
+                    plugin.GetName(),
+                    master);
+    }
+    messages.push_back(CreatePlainTextSourcedMessage(
+        messageType,
+        MessageSource::missingMaster,
+        fmt::format(
+            boost::locale::translate("This plugin requires \"{0}\" to be "
+                                     "installed, but it is missing.")
+                .str(),
+            master)));
+  };
+
   if (IsPluginActive(plugin.GetName())) {
     auto tags = metadata.GetTags();
     const auto hasFilterTag =
@@ -376,19 +474,7 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
     if (!hasFilterTag) {
       for (const auto& master : plugin.GetMasters()) {
         if (!FileExists(master)) {
-          if (logger) {
-            logger->error("\"{}\" requires \"{}\", but it is missing.",
-                          plugin.GetName(),
-                          master);
-          }
-          messages.push_back(CreatePlainTextSourcedMessage(
-              MessageType::error,
-              MessageSource::missingMaster,
-              fmt::format(
-                  boost::locale::translate("This plugin requires \"{0}\" to be "
-                                           "installed, but it is missing.")
-                      .str(),
-                  master)));
+          handleMissingMaster(master, MessageType::error);
         } else if (!IsPluginActive(master)) {
           if (logger) {
             logger->error("\"{}\" requires \"{}\", but it is inactive.",
@@ -488,6 +574,15 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
         displayNamesWithMessages.insert(displayName);
       }
     }
+  } else if (settings_.Id() == GameId::tes3 ||
+             settings_.Id() == GameId::starfield) {
+    // Morrowind and Starfield require all plugins' masters to be present for
+    // sorting to work, even if the plugins are inactive.
+    for (const auto& master : plugin.GetMasters()) {
+      if (!FileExists(master)) {
+        handleMissingMaster(master, MessageType::warn);
+      }
+    }
   }
 
   if (plugin.IsLightPlugin() && !boost::iends_with(plugin.GetName(), ".esp")) {
@@ -513,16 +608,22 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
               plugin.GetName(),
               masterName);
         }
+
+        const auto pluginType =
+            settings_.Id() == GameId::starfield
+                ? boost::locale::translate("small master").str()
+                : boost::locale::translate("light master").str();
+
         messages.push_back(CreatePlainTextSourcedMessage(
             MessageType::error,
             MessageSource::lightPluginRequiresNonMaster,
             fmt::format(
                 boost::locale::translate(
-                    "This plugin is a light master and requires the non-master "
-                    "plugin \"{0}\". This can cause issues in-game, and "
-                    "sorting "
-                    "will fail while this plugin is installed.")
+                    "This plugin is a {0} and requires the non-master plugin "
+                    "\"{1}\". This can cause issues in-game, and sorting will "
+                    "fail while this plugin is installed.")
                     .str(),
+                pluginType,
                 masterName)));
       }
     }
@@ -545,19 +646,130 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
             "will cause irreversible damage to your game saves.")));
   }
 
-  if (plugin.IsOverridePlugin() && !plugin.IsValidAsOverridePlugin()) {
+  if (plugin.IsMediumPlugin() && !plugin.IsValidAsMediumPlugin()) {
     if (logger) {
       logger->error(
-          "\"{}\" is an overlay plugin but adds new records. Using this "
+          "\"{}\" contains records that have FormIDs outside the valid range "
+          "for a medium plugin. Using this plugin will cause irreversible "
+          "damage "
+          "to your game saves.",
+          plugin.GetName());
+    }
+    messages.push_back(CreatePlainTextSourcedMessage(
+        MessageType::error,
+        MessageSource::invalidMediumPlugin,
+        boost::locale::translate(
+            "This plugin contains records that have FormIDs outside "
+            "the valid range for a medium plugin. Using this plugin "
+            "will cause irreversible damage to your game saves.")));
+  }
+
+  if (!supportsLightPlugins_ && plugin.IsLightPlugin()) {
+    if (logger) {
+      logger->error(
+          "\"{}\" is a light plugin but the game does not support light "
+          "plugins.",
+          plugin.GetName());
+    }
+    const auto pluginType = boost::iends_with(plugin.GetName(), ".esp")
+                                ? boost::locale::translate("plugin")
+                                /* translators: master as in a plugin that is
+                                   loaded as if its master flag is set. */
+                                : boost::locale::translate("master");
+    if (settings_.Type() == GameType::tes5vr) {
+      messages.push_back(SourcedMessage{
+          MessageType::error,
+          MessageSource::lightPluginNotSupported,
+          fmt::format(
+              /* translators: {1} in this message can be "master" or "plugin"
+                 and {2} is the name of a requirement. */
+              boost::locale::translate(
+                  "\"{0}\" is a light {1}, but {2} seems to be "
+                  "missing. Please ensure you have correctly installed "
+                  "{2} and all its requirements.")
+                  .str(),
+              EscapeMarkdownASCIIPunctuation(plugin.GetName()),
+              pluginType.str(),
+              "[Skyrim VR ESL "
+              "Support](https://www.nexusmods.com/skyrimspecialedition/"
+              "mods/106712/)")});
+    } else if (boost::iends_with(plugin.GetName(), ".esl")) {
+      messages.push_back(CreatePlainTextSourcedMessage(
+          MessageType::error,
+          MessageSource::lightPluginNotSupported,
+          fmt::format(boost::locale::translate("\"{0}\" is a .esl plugin, but "
+                                               "the game does not support such "
+                                               "plugins, and will not load it.")
+                          .str(),
+                      plugin.GetName())));
+    } else {
+      messages.push_back(CreatePlainTextSourcedMessage(
+          MessageType::warn,
+          MessageSource::lightPluginNotSupported,
+          fmt::format(
+              /* translators: {1} in this message can be "master" or "plugin".
+               */
+              boost::locale::translate(
+                  "\"{0}\" is flagged as a light {1}, but the game "
+                  "does not support such plugins, and will load it as "
+                  "a full {1}.")
+                  .str(),
+              plugin.GetName(),
+              pluginType.str())));
+    }
+  }
+
+  if (plugin.IsUpdatePlugin() && !plugin.IsValidAsUpdatePlugin()) {
+    if (logger) {
+      logger->error(
+          "\"{}\" is an update plugin but adds new records. Using this "
           "plugin may cause irreversible damage to your game saves.",
           plugin.GetName());
     }
     messages.push_back(CreatePlainTextSourcedMessage(
         MessageType::error,
-        MessageSource::invalidOverridePlugin,
+        MessageSource::invalidUpdatePlugin,
         boost::locale::translate(
-            "This plugin is an overlay plugin but adds new records. Using "
+            "This plugin is an update plugin but adds new records. Using "
             "this plugin may cause irreversible damage to your game saves.")));
+  }
+
+  if (settings_.Id() == GameId::starfield && !plugin.IsBlueprintPlugin()) {
+    for (const auto& masterName : plugin.GetMasters()) {
+      auto master = GetPlugin(masterName);
+      if (!master) {
+        if (logger) {
+          logger->debug(
+              "Tried to get plugin object for master \"{}\" of \"{}\" but it "
+              "was not loaded.",
+              masterName,
+              plugin.GetName());
+        }
+        continue;
+      }
+
+      if (master->IsBlueprintPlugin() && master->IsMaster()) {
+        if (logger) {
+          logger->warn(
+              "\"{}\" is not a blueprint master and requires the blueprint "
+              "master "
+              "\"{}\". This may cause issues in-game.",
+              plugin.GetName(),
+              masterName);
+        }
+
+        messages.push_back(CreatePlainTextSourcedMessage(
+            MessageType::warn,
+            MessageSource::blueprintMasterMaster,
+            fmt::format(boost::locale::translate(
+                            "This plugin is not a blueprint master and "
+                            "requires the blueprint master \"{0}\". This can "
+                            "cause issues in-game, as this plugin will always "
+                            "load before \"{0}\".")
+                            .str(),
+                        masterName)));
+      }
+    }
   }
 
   if (plugin.GetHeaderVersion().has_value() &&
@@ -582,6 +794,19 @@ std::vector<SourcedMessage> Game::CheckInstallValidity(
                 .str(),
             plugin.GetHeaderVersion().value(),
             settings_.MinimumHeaderVersion())));
+  }
+
+  for (const auto& masterName : plugin.GetMasters()) {
+    if (Filename(plugin.GetName()) == Filename(masterName)) {
+      if (logger) {
+        logger->error("\"{}\" has itself as a master.", plugin.GetName());
+      }
+      messages.push_back(CreatePlainTextSourcedMessage(
+          MessageType::error,
+          MessageSource::selfMaster,
+          boost::locale::translate("This plugin has itself as a master.")));
+      break;
+    }
   }
 
   if (metadata.GetGroup().has_value()) {
@@ -690,6 +915,13 @@ void Game::LoadCreationClubPluginNames() {
 
   creationClubPlugins_.clear();
 
+  if (!HadCreationClub()) {
+    logger->debug(
+        "The current game was not part of the Creation Club while it was "
+        "active, skipping loading Creation Club plugin names.");
+    return;
+  }
+
   const auto cccFilename = GetCCCFilename(settings_.Type());
 
   if (!cccFilename.has_value()) {
@@ -733,6 +965,12 @@ void Game::LoadCreationClubPluginNames() {
   }
 }
 
+bool Game::HadCreationClub() const {
+  // The Creation Club has been replaced, but while it was active it was
+  // available for Skyrim SE and Fallout 4.
+  return settings_.Id() == GameId::tes5se || settings_.Id() == GameId::fo4;
+}
+
 void Game::LoadAllInstalledPlugins(bool headersOnly) {
   try {
     gameHandle_->LoadCurrentLoadOrderState();
@@ -762,9 +1000,17 @@ void Game::LoadAllInstalledPlugins(bool headersOnly) {
       CheckForRemovedPlugins(installedPluginPaths, loadedPluginNames));
 
   pluginsFullyLoaded_ = !headersOnly;
+
+  supportsLightPlugins_ = loot::SupportsLightPlugins(*this);
 }
 
 bool Game::ArePluginsFullyLoaded() const { return pluginsFullyLoaded_; }
+
+bool Game::SupportsLightPlugins() const { return supportsLightPlugins_; }
+
+bool Game::SupportsMediumPlugins() const {
+  return settings_.Id() == GameId::starfield;
+}
 
 fs::path Game::MasterlistPath() const {
   return GetMasterlistPath(lootDataPath_, settings_);
@@ -802,7 +1048,7 @@ std::optional<short> Game::GetActiveLoadOrderIndex(
   // given plugin is encountered. If the plugin isn't active or in the load
   // order, return nullopt.
 
-  if (!IsPluginActive(plugin.GetName()) || plugin.IsOverridePlugin()) {
+  if (!IsPluginActive(plugin.GetName())) {
     return std::nullopt;
   }
 
@@ -813,8 +1059,8 @@ std::optional<short> Game::GetActiveLoadOrderIndex(
     }
 
     auto otherPlugin = GetPlugin(otherPluginName);
-    if (otherPlugin && !otherPlugin->IsOverridePlugin() &&
-        plugin.IsLightPlugin() == otherPlugin->IsLightPlugin() &&
+    if (otherPlugin && plugin.IsLightPlugin() == otherPlugin->IsLightPlugin() &&
+        plugin.IsMediumPlugin() == otherPlugin->IsMediumPlugin() &&
         IsPluginActive(otherPluginName)) {
       ++numberOfActivePlugins;
     }
@@ -886,6 +1132,23 @@ std::vector<std::string> Game::SortPlugins() {
             boost::locale::translate("The group \"{0}\" does not exist.").str(),
             e.GetGroupName())));
     sortedPlugins.clear();
+  } catch (const std::system_error& e) {
+    if (logger) {
+      logger->error("Failed to sort plugins. Details: {}", e.what());
+    }
+
+    static const auto ESP_ERROR_PLUGIN_METADATA_NOT_FOUND = 14;
+    if (e.code().category() == esplugin_category() &&
+        e.code().value() == ESP_ERROR_PLUGIN_METADATA_NOT_FOUND) {
+      AppendMessage(CreatePlainTextSourcedMessage(
+          MessageType::error,
+          MessageSource::caughtException,
+          boost::locale::translate(
+              "Sorting failed because there is at least one installed plugin "
+              "that depends on at least one plugin that is not installed.")));
+    }
+
+    sortedPlugins.clear();
   } catch (const std::exception& e) {
     if (logger) {
       logger->error("Failed to sort plugins. Details: {}", e.what());
@@ -905,7 +1168,8 @@ void Game::DecrementLoadOrderSortCount() {
 }
 
 std::vector<SourcedMessage> Game::GetMessages(
-    const std::string& language) const {
+    const std::string& language,
+    bool warnOnCaseSensitivePaths) const {
   std::vector<SourcedMessage> output(
       ToSourcedMessages(gameHandle_->GetDatabase().GetGeneralMessages(true),
                         MessageSource::messageMetadata,
@@ -924,20 +1188,24 @@ std::vector<SourcedMessage> Game::GetMessages(
                    "You have not sorted your load order this session."));
   }
 
-  size_t activeNormalPluginsCount = 0;
+  size_t activeFullPluginsCount = 0;
   size_t activeLightPluginsCount = 0;
+  size_t activeMediumPluginsCount = 0;
   for (const auto& plugin : GetPlugins()) {
     if (IsPluginActive(plugin->GetName())) {
       if (plugin->IsLightPlugin()) {
         ++activeLightPluginsCount;
+      } else if (plugin->IsMediumPlugin()) {
+        ++activeMediumPluginsCount;
       } else {
-        ++activeNormalPluginsCount;
+        ++activeFullPluginsCount;
       }
     }
   }
 
-  static constexpr size_t MWSE_SAFE_MAX_ACTIVE_NORMAL_PLUGINS = 1023;
-  static constexpr size_t SAFE_MAX_ACTIVE_NORMAL_PLUGINS = 255;
+  static constexpr size_t MWSE_SAFE_MAX_ACTIVE_FULL_PLUGINS = 1023;
+  static constexpr size_t SAFE_MAX_ACTIVE_FULL_PLUGINS = 255;
+  static constexpr size_t SAFE_MAX_ACTIVE_MEDIUM_PLUGINS = 255;
   static constexpr size_t SAFE_MAX_ACTIVE_LIGHT_PLUGINS = 4096;
 
   const auto logger = getLogger();
@@ -945,56 +1213,56 @@ std::vector<SourcedMessage> Game::GetMessages(
       settings_.Id() == GameId::tes3 &&
       std::filesystem::exists(settings_.GamePath() / "MWSE.dll");
 
-  auto safeMaxActiveNormalPlugins = SAFE_MAX_ACTIVE_NORMAL_PLUGINS;
+  auto safeMaxActiveFullPlugins = SAFE_MAX_ACTIVE_FULL_PLUGINS;
 
   if (isMWSEInstalled) {
     if (logger) {
       logger->info(
           "MWSE is installed, which raises the safe maximum number of active "
           "plugins from {} to {}",
-          SAFE_MAX_ACTIVE_NORMAL_PLUGINS,
-          MWSE_SAFE_MAX_ACTIVE_NORMAL_PLUGINS);
+          SAFE_MAX_ACTIVE_FULL_PLUGINS,
+          MWSE_SAFE_MAX_ACTIVE_FULL_PLUGINS);
     }
-    safeMaxActiveNormalPlugins = MWSE_SAFE_MAX_ACTIVE_NORMAL_PLUGINS;
+    safeMaxActiveFullPlugins = MWSE_SAFE_MAX_ACTIVE_FULL_PLUGINS;
   }
 
-  if (activeNormalPluginsCount > safeMaxActiveNormalPlugins) {
+  if (activeFullPluginsCount > safeMaxActiveFullPlugins) {
     if (logger) {
       logger->warn(
-          "The load order has {} active normal plugins, the safe limit is {}.",
-          activeNormalPluginsCount,
-          safeMaxActiveNormalPlugins);
+          "The load order has {} active full plugins, the safe limit is {}.",
+          activeFullPluginsCount,
+          safeMaxActiveFullPlugins);
     }
 
-    if (activeLightPluginsCount > 0) {
+    if (activeLightPluginsCount > 0 || activeMediumPluginsCount > 0) {
       addWarning(MessageSource::activePluginsCountCheck,
                  fmt::format(boost::locale::translate(
-                                 "You have {0} active normal plugins but the "
+                                 "You have {0} active full plugins but the "
                                  "game only supports up to {1}.")
                                  .str(),
-                             activeNormalPluginsCount,
-                             safeMaxActiveNormalPlugins));
+                             activeFullPluginsCount,
+                             safeMaxActiveFullPlugins));
     } else {
       addWarning(MessageSource::activePluginsCountCheck,
                  fmt::format(boost::locale::translate(
                                  "You have {0} active plugins but the "
                                  "game only supports up to {1}.")
                                  .str(),
-                             activeNormalPluginsCount,
-                             safeMaxActiveNormalPlugins));
+                             activeFullPluginsCount,
+                             safeMaxActiveFullPlugins));
     }
   }
 
   if (isMWSEInstalled &&
-      activeNormalPluginsCount > SAFE_MAX_ACTIVE_NORMAL_PLUGINS &&
-      activeNormalPluginsCount <= MWSE_SAFE_MAX_ACTIVE_NORMAL_PLUGINS) {
+      activeFullPluginsCount > SAFE_MAX_ACTIVE_FULL_PLUGINS &&
+      activeFullPluginsCount <= MWSE_SAFE_MAX_ACTIVE_FULL_PLUGINS) {
     if (logger) {
       logger->warn(
           "Morrowind must be launched using MWSE: {} plugins are active, "
           "which is more than the {} plugins that vanilla Morrowind "
           "supports.",
-          activeNormalPluginsCount,
-          SAFE_MAX_ACTIVE_NORMAL_PLUGINS);
+          activeFullPluginsCount,
+          SAFE_MAX_ACTIVE_FULL_PLUGINS);
     }
 
     addWarning(MessageSource::activePluginsCountCheck,
@@ -1002,6 +1270,15 @@ std::vector<SourcedMessage> Game::GetMessages(
                    "Do not launch Morrowind without the use of MWSE or it will "
                    "cause severe damage to your game."));
   }
+
+  const auto lightPluginType =
+      settings_.Id() == GameId::starfield
+          ? boost::locale::translate(
+                "small plugin", "small plugins", activeLightPluginsCount)
+                .str()
+          : boost::locale::translate(
+                "light plugin", "light plugins", activeLightPluginsCount)
+                .str();
 
   if (activeLightPluginsCount > SAFE_MAX_ACTIVE_LIGHT_PLUGINS) {
     if (logger) {
@@ -1011,33 +1288,72 @@ std::vector<SourcedMessage> Game::GetMessages(
           SAFE_MAX_ACTIVE_LIGHT_PLUGINS);
     }
 
-    addWarning(MessageSource::activePluginsCountCheck,
-               fmt::format(boost::locale::translate(
-                               "You have {0} active light plugins but the "
-                               "game only supports up to {1}.")
-                               .str(),
-                           activeLightPluginsCount,
-                           SAFE_MAX_ACTIVE_LIGHT_PLUGINS));
+    addWarning(
+        MessageSource::activePluginsCountCheck,
+        fmt::format(boost::locale::translate("You have {0} active {1} but the "
+                                             "game only supports up to {2}.")
+                        .str(),
+                    activeLightPluginsCount,
+                    lightPluginType,
+                    SAFE_MAX_ACTIVE_LIGHT_PLUGINS));
   }
 
-  if (activeNormalPluginsCount >= SAFE_MAX_ACTIVE_NORMAL_PLUGINS &&
+  if (activeFullPluginsCount >= SAFE_MAX_ACTIVE_FULL_PLUGINS &&
       activeLightPluginsCount > 0) {
     if (logger) {
       logger->warn(
-          "{} normal plugins and at least one light plugin are active at "
+          "{} full plugins and at least one light plugin are active at "
           "the same time.",
-          activeNormalPluginsCount);
+          activeFullPluginsCount);
+    }
+
+    addWarning(
+        MessageSource::activePluginsCountCheck,
+        fmt::format(boost::locale::translate(
+                        "You have a full plugin and {0} {1} sharing the FE "
+                        "load order index. Deactivate a full plugin or your "
+                        "{1} to avoid potential issues.")
+                        .str(),
+                    activeLightPluginsCount,
+                    lightPluginType));
+  }
+
+  if (activeMediumPluginsCount > SAFE_MAX_ACTIVE_MEDIUM_PLUGINS) {
+    if (logger) {
+      logger->warn(
+          "The load order has {} active medium plugins, the safe limit is {}.",
+          activeMediumPluginsCount,
+          SAFE_MAX_ACTIVE_MEDIUM_PLUGINS);
+    }
+
+    addWarning(MessageSource::activePluginsCountCheck,
+               fmt::format(boost::locale::translate(
+                               "You have {0} active medium plugins but the "
+                               "game only supports up to {1}.")
+                               .str(),
+                           activeMediumPluginsCount,
+                           SAFE_MAX_ACTIVE_MEDIUM_PLUGINS));
+  }
+
+  if (activeFullPluginsCount >= (SAFE_MAX_ACTIVE_FULL_PLUGINS - 1) &&
+      activeMediumPluginsCount > 0) {
+    if (logger) {
+      logger->warn(
+          "{} full plugins and at least one medium plugin are active at "
+          "the same time.",
+          activeFullPluginsCount);
     }
 
     addWarning(
         MessageSource::activePluginsCountCheck,
         boost::locale::translate(
-            "You have a normal plugin and at least one light plugin sharing "
-            "the FE load order index. Deactivate a normal plugin or all your "
-            "light plugins to avoid potential issues."));
+            "You have a full plugin and at least one medium plugin sharing "
+            "the FD load order index. Deactivate a full plugin or all your "
+            "medium plugins to avoid potential issues."));
   }
 
-  if (IsPathCaseSensitive(GetSettings().DataPath())) {
+  if (warnOnCaseSensitivePaths &&
+      IsPathCaseSensitive(GetSettings().DataPath())) {
     addWarning(
         MessageSource::caseSensitivePathCheck,
         fmt::format(
@@ -1068,7 +1384,7 @@ std::vector<SourcedMessage> Game::GetMessages(
       std::filesystem::create_directories(gameLocalPath);
     }
 
-    if (IsPathCaseSensitive(gameLocalPath)) {
+    if (warnOnCaseSensitivePaths && IsPathCaseSensitive(gameLocalPath)) {
       addWarning(
           MessageSource::caseSensitivePathCheck,
           fmt::format(
@@ -1241,6 +1557,7 @@ std::vector<std::filesystem::path> Game::GetInstalledPluginPaths() const {
   // found to a buffer and then check if they're valid plugins in parallel.
   std::vector<std::filesystem::path> maybePlugins;
   std::set<Filename> foundPlugins;
+  std::set<Filename> internallyFoundPlugins;
 
   // Scan external data paths first, as the game checks them before the main
   // data path.
@@ -1268,8 +1585,6 @@ std::vector<std::filesystem::path> Game::GetInstalledPluginPaths() const {
     }
   }
 
-  // Scan main data path separately as only its filenames need to be stored,
-  // not the whole path, which simplifies the log/debugging.
   if (logger) {
     logger->trace("Scanning for plugins in {}",
                   settings_.DataPath().u8string());
@@ -1284,7 +1599,33 @@ std::vector<std::filesystem::path> Game::GetInstalledPluginPaths() const {
         maybePlugins.push_back(it->path());
         foundPlugins.insert(filename);
       }
+
+      if (settings_.Id() == GameId::starfield) {
+        internallyFoundPlugins.insert(filename);
+      }
     }
+  }
+
+  if (settings_.Id() == GameId::starfield) {
+    const auto newEndIt =
+        std::remove_if(std::execution::par_unseq,
+                       maybePlugins.begin(),
+                       maybePlugins.end(),
+                       [&](const std::filesystem::path& path) {
+                         // Starfield will only load a plugin that's present in
+                         // My Games if it's also present in the install path.
+                         const auto ignorePlugin =
+                             internallyFoundPlugins.count(
+                                 Filename(path.filename().u8string())) == 0;
+                         if (ignorePlugin && logger) {
+                           logger->debug(
+                               "Ignoring plugin {} as it is not also present "
+                               "in the game install's Data folder",
+                               path.u8string());
+                         }
+                         return ignorePlugin;
+                       });
+    maybePlugins.erase(newEndIt, maybePlugins.end());
   }
 
   const auto newEndIt =

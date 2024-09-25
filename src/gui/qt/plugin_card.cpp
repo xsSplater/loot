@@ -25,7 +25,7 @@
 
 #include "gui/qt/plugin_card.h"
 
-#include <spdlog/fmt/fmt.h>
+#include <fmt/base.h>
 
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QStyle>
@@ -83,7 +83,10 @@ PluginCard::PluginCard(QWidget* parent) : QFrame(parent) { setupUi(); }
 void PluginCard::setIcons() {
   setIcon(isActiveLabel, IconFactory::getIsActiveIcon());
   setIcon(masterFileLabel, IconFactory::getMasterFileIcon());
+  setIcon(blueprintMasterLabel, IconFactory::getBlueprintMasterIcon());
   setIcon(lightPluginLabel, IconFactory::getLightPluginIcon());
+  setIcon(lightPluginLabel, IconFactory::getLightPluginIcon());
+  setIcon(mediumPluginLabel, IconFactory::getMediumPluginIcon());
   setIcon(emptyPluginLabel, IconFactory::getEmptyPluginIcon());
   setIcon(loadsArchiveLabel, IconFactory::getLoadsArchiveIcon());
   setIcon(isCleanLabel, IconFactory::getIsCleanIcon());
@@ -109,7 +112,9 @@ void PluginCard::setContent(const PluginItem& plugin,
 
   isActiveLabel->setVisible(plugin.isActive);
   masterFileLabel->setVisible(plugin.isMaster);
+  blueprintMasterLabel->setVisible(plugin.isBlueprintMaster);
   lightPluginLabel->setVisible(plugin.isLightPlugin);
+  mediumPluginLabel->setVisible(plugin.isMediumPlugin);
   emptyPluginLabel->setVisible(plugin.isEmpty);
   loadsArchiveLabel->setVisible(plugin.loadsArchive);
   isCleanLabel->setVisible(plugin.cleaningUtility.has_value());
@@ -177,6 +182,14 @@ void PluginCard::setContent(const PluginItem& plugin,
     isCleanLabel->setToolTip(QString());
   }
 
+  if (plugin.gameId == GameId::starfield) {
+    lightPluginLabel->setToolTip(translate("Small Plugin"));
+    setIcon(lightPluginLabel, IconFactory::getSmallPluginIcon());
+  } else {
+    lightPluginLabel->setToolTip(translate("Light Plugin"));
+    setIcon(lightPluginLabel, IconFactory::getLightPluginIcon());
+  }
+
   layout()->activate();
 }
 
@@ -198,6 +211,12 @@ void PluginCard::setSearchResult(bool isSearchResult,
 
 void PluginCard::refreshMessages() { messagesWidget->refresh(); }
 
+void PluginCard::paintEvent(QPaintEvent* event) {
+  QFrame::paintEvent(event);
+
+  PaintCardBorderShadows(this, true);
+}
+
 void PluginCard::setupUi() {
   crcLabel->setObjectName("plugin-crc");
   versionLabel->setObjectName("plugin-version");
@@ -210,7 +229,9 @@ void PluginCard::setupUi() {
 
   isActiveLabel->setVisible(false);
   masterFileLabel->setVisible(false);
+  blueprintMasterLabel->setVisible(false);
   lightPluginLabel->setVisible(false);
+  mediumPluginLabel->setVisible(false);
   emptyPluginLabel->setVisible(false);
   loadsArchiveLabel->setVisible(false);
   isCleanLabel->setVisible(false);
@@ -258,7 +279,9 @@ void PluginCard::setupUi() {
   headerLayout->addStretch();
   headerLayout->addWidget(isActiveLabel);
   headerLayout->addWidget(masterFileLabel);
+  headerLayout->addWidget(blueprintMasterLabel);
   headerLayout->addWidget(lightPluginLabel);
+  headerLayout->addWidget(mediumPluginLabel);
   headerLayout->addWidget(emptyPluginLabel);
   headerLayout->addWidget(loadsArchiveLabel);
   headerLayout->addWidget(isCleanLabel);
@@ -286,7 +309,9 @@ void PluginCard::setupUi() {
 void PluginCard::translateUi() {
   isActiveLabel->setToolTip(translate("Active Plugin"));
   masterFileLabel->setToolTip(translate("Master Plugin"));
+  blueprintMasterLabel->setToolTip(translate("Blueprint Master Plugin"));
   lightPluginLabel->setToolTip(translate("Light Plugin"));
+  mediumPluginLabel->setToolTip(translate("Medium Plugin"));
   emptyPluginLabel->setToolTip(translate("Empty Plugin"));
   loadsArchiveLabel->setToolTip(translate("Loads Archive"));
   hasUserEditsLabel->setToolTip(translate("Has User Metadata"));

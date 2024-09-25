@@ -25,7 +25,7 @@
 
 #include "gui/qt/main_window.h"
 
-#include <spdlog/fmt/fmt.h>
+#include <fmt/base.h>
 
 #include <QtCore/QTimer>
 #include <QtGui/QCloseEvent>
@@ -715,7 +715,7 @@ void MainWindow::translateUi() {
      menus or sidebar sections. */
   menuFile->setTitle(translate("&File"));
   /* translators: This string is an action in the File menu. */
-  actionSettings->setText(translate("&Settings..."));
+  actionSettings->setText(translate("&Settings…"));
   /* translators: This string is an action in the File menu. */
   actionUpdateMasterlists->setText(translate("&Update All Masterlists"));
   /* translators: This string is an action in the File menu. */
@@ -729,9 +729,9 @@ void MainWindow::translateUi() {
      menus or sidebar sections. */
   menuGame->setTitle(translate("&Game"));
   /* translators: This string is an action in the Game menu. */
-  actionOpenGroupsEditor->setText(translate("&Edit Groups..."));
+  actionOpenGroupsEditor->setText(translate("&Edit Groups…"));
   /* translators: This string is an action in the Game menu. */
-  actionSearch->setText(translate("Searc&h Cards..."));
+  actionSearch->setText(translate("Searc&h Cards…"));
   /* translators: This string is an action in the Game menu. */
   actionCopyLoadOrder->setText(translate("Copy &Load Order"));
   /* translators: This string is an action in the Game menu. */
@@ -739,11 +739,11 @@ void MainWindow::translateUi() {
   /* translators: This string is an action in the Game menu. */
   actionRefreshContent->setText(translate("&Refresh Content"));
   /* translators: This string is an action in the Game menu. */
-  actionRedatePlugins->setText(translate("Redate &Plugins..."));
+  actionRedatePlugins->setText(translate("Redate &Plugins…"));
   /* translators: This string is an action in the Game menu. */
   actionFixAmbiguousLoadOrder->setText(translate("&Fix Ambiguous Load Order"));
   /* translators: This string is an action in the Game menu. */
-  actionClearAllUserMetadata->setText(translate("Clear All &User Metadata..."));
+  actionClearAllUserMetadata->setText(translate("Clear All &User Metadata…"));
 
   /* translators: The mnemonic in this string shouldn't conflict with other
      menus or sidebar sections. */
@@ -755,9 +755,9 @@ void MainWindow::translateUi() {
   /* translators: This string is an action in the Plugin menu. */
   actionCopyMetadata->setText(translate("Copy &Metadata"));
   /* translators: This string is an action in the Plugin menu. */
-  actionEditMetadata->setText(translate("&Edit Metadata..."));
+  actionEditMetadata->setText(translate("&Edit Metadata…"));
   /* translators: This string is an action in the Plugin menu. */
-  actionClearMetadata->setText(translate("Clear &User Metadata..."));
+  actionClearMetadata->setText(translate("Clear &User Metadata…"));
 
   /* translators: The mnemonic in this string shouldn't conflict with other
      menus or sidebar sections. */
@@ -812,8 +812,7 @@ void MainWindow::setIcons() {
 
 void MainWindow::enableGameActions() {
   menuGame->setEnabled(true);
-  actionSort->setEnabled(state.GetCurrentGame().GetSettings().Id() !=
-                         GameId::starfield);
+  actionSort->setEnabled(true);
   actionUpdateMasterlist->setEnabled(true);
   actionSearch->setEnabled(true);
 
@@ -865,8 +864,7 @@ void MainWindow::exitEditingState() {
   actionClearMetadata->setEnabled(true);
   gameComboBox->setEnabled(true);
   actionUpdateMasterlist->setEnabled(true);
-  actionSort->setEnabled(state.GetCurrentGame().GetSettings().Id() !=
-                         GameId::starfield);
+  actionSort->setEnabled(true);
 
   sidebarPluginsView->verticalHeader()->setDefaultSectionSize(
       getSidebarRowHeight(false));
@@ -940,20 +938,22 @@ void MainWindow::updateGeneralInformation() {
 
   if (!state.HasCurrentGame()) {
     pluginItemModel->setGeneralInformation(
-        false, FileRevisionSummary(), preludeInfo, initMessages);
+        false, false, FileRevisionSummary(), preludeInfo, initMessages);
     return;
   }
 
   const auto masterlistInfo = getFileRevisionSummary(
       state.GetCurrentGame().MasterlistPath(), FileType::Masterlist);
 
-  const auto gameMessages =
-      state.GetCurrentGame().GetMessages(state.getSettings().getLanguage());
+  const auto gameMessages = state.GetCurrentGame().GetMessages(
+      state.getSettings().getLanguage(),
+      state.getSettings().isWarnOnCaseSensitiveGamePathsEnabled());
   initMessages.insert(
       initMessages.end(), gameMessages.begin(), gameMessages.end());
 
   pluginItemModel->setGeneralInformation(
-      SupportsLightPlugins(state.GetCurrentGame().GetSettings().Type()),
+      state.GetCurrentGame().SupportsLightPlugins(),
+      state.GetCurrentGame().SupportsMediumPlugins(),
       masterlistInfo,
       preludeInfo,
       initMessages);
@@ -961,8 +961,9 @@ void MainWindow::updateGeneralInformation() {
 
 void MainWindow::updateGeneralMessages() {
   auto initMessages = state.getInitMessages();
-  auto gameMessages =
-      state.GetCurrentGame().GetMessages(state.getSettings().getLanguage());
+  auto gameMessages = state.GetCurrentGame().GetMessages(
+      state.getSettings().getLanguage(),
+      state.getSettings().isWarnOnCaseSensitiveGamePathsEnabled());
   initMessages.insert(
       initMessages.end(), gameMessages.begin(), gameMessages.end());
 
@@ -994,9 +995,8 @@ void MainWindow::updateSidebarColumnWidths() {
   // to calculate the load order section width because that's one of the games
   // that uses the wider width.
   const auto gameSupportsLightPlugins =
-      state.HasCurrentGame()
-          ? SupportsLightPlugins(state.GetCurrentGame().GetSettings().Type())
-          : false;
+      state.HasCurrentGame() ? state.GetCurrentGame().SupportsLightPlugins()
+                             : false;
   const auto indexSectionWidth =
       calculateSidebarIndexSectionWidth(gameSupportsLightPlugins);
 
@@ -1054,6 +1054,7 @@ void MainWindow::refreshPluginRawData(const std::string& pluginName) {
     if (pluginItem.name == pluginName) {
       const auto& plugin = *state.GetCurrentGame().GetPlugin(pluginName);
       const auto newPluginItem = PluginItem(
+          state.GetCurrentGame().GetSettings().Id(),
           plugin,
           state.GetCurrentGame(),
           state.GetCurrentGame().GetActiveLoadOrderIndex(plugin, loadOrder),
@@ -1075,25 +1076,26 @@ bool MainWindow::hasErrorMessages() const {
 }
 
 void MainWindow::sortPlugins(bool isAutoSort) {
-  std::vector<Task*> tasks;
+  std::vector<Task*> updateTasks;
 
   if (state.getSettings().isMasterlistUpdateBeforeSortEnabled()) {
-    handleProgressUpdate(translate("Updating and parsing masterlist..."));
+    handleProgressUpdate(translate("Updating and parsing masterlist…"));
 
     const auto preludeTask = new UpdatePreludeTask(state);
-    connect(preludeTask, &Task::error, this, &MainWindow::handleError);
 
-    tasks.push_back(preludeTask);
+    updateTasks.push_back(preludeTask);
 
     const auto masterlistTask =
         new UpdateMasterlistTask(state.GetCurrentGame());
 
-    connect(masterlistTask, &Task::error, this, &MainWindow::handleError);
-
-    tasks.push_back(masterlistTask);
+    updateTasks.push_back(masterlistTask);
   }
 
   auto progressUpdater = new ProgressUpdater();
+  connect(progressUpdater,
+          &ProgressUpdater::progressUpdate,
+          this,
+          &MainWindow::handleProgressUpdate);
 
   // This lambda will run from the worker thread.
   auto sendProgressUpdate = [progressUpdater](std::string message) {
@@ -1111,13 +1113,35 @@ void MainWindow::sortPlugins(bool isAutoSort) {
   const auto sortHandler = isAutoSort ? &MainWindow::handlePluginsAutoSorted
                                       : &MainWindow::handlePluginsManualSorted;
 
-  connect(sortTask, &Task::error, this, &MainWindow::handleError);
+  auto updatesFuture =
+      whenAllTasks(updateTasks)
+          .then(this,
+                [this](const QList<QFuture<QueryResult>> futures) {
+                  std::vector<QueryResult> results;
+                  for (const auto& future : futures) {
+                    results.push_back(future.result());
+                  }
 
-  tasks.push_back(sortTask);
+                  handleMasterlistUpdated(results);
+                })
+          .onFailed(this,
+                    [this](const std::exception& e) { handleError(e.what()); })
+          .then(this, [sortTask]() { executeBackgroundTask(sortTask); });
 
-  const auto executor = new SequentialTaskExecutor(this, tasks);
+  auto sortFuture =
+      taskFuture(sortTask)
+          .then(this,
+                [this, sortHandler](QueryResult result) {
+                  (this->*sortHandler)(result);
+                })
+          .onFailed(this,
+                    [this](const std::exception& e) { handleError(e.what()); })
+          .then(this, [this, progressUpdater]() {
+            progressDialog->reset();
+            progressUpdater->deleteLater();
+          });
 
-  executeBackgroundTasks(executor, progressUpdater, sortHandler);
+  executeConcurrentBackgroundTasks(updateTasks, updatesFuture);
 }
 
 void MainWindow::showFirstRunDialog() {
@@ -1305,47 +1329,24 @@ void MainWindow::executeBackgroundQuery(
     std::unique_ptr<Query> query,
     void (MainWindow::*onComplete)(QueryResult),
     ProgressUpdater* progressUpdater) {
-  auto task = new QueryTask(std::move(query));
-
-  connect(task, &Task::finished, this, onComplete);
-  connect(task, &Task::error, this, &MainWindow::handleError);
-
-  const auto executor = new SequentialTaskExecutor(this, {task});
-
-  executeBackgroundTasks(executor, progressUpdater, nullptr);
-}
-
-void MainWindow::executeBackgroundTasks(
-    TaskExecutor* executor,
-    const ProgressUpdater* progressUpdater,
-    void (MainWindow::*onComplete)(std::vector<QueryResult>)) {
   if (progressUpdater != nullptr) {
     connect(progressUpdater,
             &ProgressUpdater::progressUpdate,
             this,
             &MainWindow::handleProgressUpdate);
-
-    connect(executor,
-            &TaskExecutor::finished,
-            progressUpdater,
-            &QObject::deleteLater);
   }
 
-  if (onComplete != nullptr) {
-    connect(executor, &TaskExecutor::finished, this, onComplete);
-  }
-
-  connect(executor, &TaskExecutor::finished, executor, &QObject::deleteLater);
-
-  // Reset (i.e. close) the progress dialog once the thread has finished in case
-  // it was used while running these queries. This can't be done from any one
-  // handler because none of them know if they are the last to run.
-  connect(executor,
-          &TaskExecutor::finished,
-          this,
-          &MainWindow::handleTaskExecutorFinished);
-
-  executor->start();
+  loot::executeBackgroundQuery(std::move(query))
+      .then(this,
+            [this, onComplete](QueryResult result) {
+              (this->*onComplete)(result);
+            })
+      .onFailed(this, [this](std::exception& e) { handleError(e.what()); })
+      .then(this, [progressUpdater]() {
+        if (progressUpdater) {
+          progressUpdater->deleteLater();
+        }
+      });
 }
 
 void MainWindow::handleError(const std::string& message) {
@@ -1388,6 +1389,8 @@ void MainWindow::handleGameDataLoaded(QueryResult result) {
   updateGeneralInformation();
 
   filtersWidget->setGroups(GetGroupNames(state.GetCurrentGame()));
+  filtersWidget->showCreationClubPluginsFilter(
+      state.GetCurrentGame().HadCreationClub());
 
   pluginEditorWidget->setBashTagCompletions(
       state.GetCurrentGame().GetKnownBashTags());
@@ -1395,14 +1398,10 @@ void MainWindow::handleGameDataLoaded(QueryResult result) {
   enableGameActions();
 }
 
-bool MainWindow::handlePluginsSorted(std::vector<QueryResult> results) {
-  if (results.size() > 1) {
-    handleMasterlistUpdated(results);
-  }
-
+bool MainWindow::handlePluginsSorted(QueryResult result) {
   filtersWidget->resetOverlapAndGroupsFilters();
 
-  auto sortedPlugins = std::get<PluginItems>(results.back());
+  auto sortedPlugins = std::get<PluginItems>(result);
 
   if (sortedPlugins.empty()) {
     // If there was a sorting failure the array of plugins will be empty.
@@ -1533,7 +1532,7 @@ void MainWindow::on_actionSettings_triggered() {
 
 void MainWindow::on_actionUpdateMasterlists_triggered() {
   try {
-    handleProgressUpdate(translate("Updating and parsing masterlist..."));
+    handleProgressUpdate(translate("Updating and parsing masterlist…"));
 
     const auto preludeSource = state.getSettings().getPreludeSource();
     const auto preludePath = state.getPreludePath();
@@ -1541,8 +1540,6 @@ void MainWindow::on_actionUpdateMasterlists_triggered() {
     std::vector<Task*> tasks;
 
     const auto preludeTask = new UpdatePreludeTask(state);
-
-    connect(preludeTask, &Task::error, this, &MainWindow::handleError);
 
     tasks.push_back(preludeTask);
 
@@ -1555,18 +1552,26 @@ void MainWindow::on_actionUpdateMasterlists_triggered() {
           settings.MasterlistSource(),
           GetMasterlistPath(state.getLootDataPath(), settings));
 
-      connect(task, &Task::error, this, &MainWindow::handleError);
-
       tasks.push_back(task);
     }
 
-    handleProgressUpdate(translate("Updating all masterlists..."));
+    handleProgressUpdate(translate("Updating all masterlists…"));
 
-    const auto executor = new ParallelTaskExecutor(this, tasks);
+    auto whenAll = whenAllTasks(tasks)
+                       .then(this,
+                             [this](const QList<QFuture<QueryResult>> futures) {
+                               std::vector<QueryResult> results;
+                               for (const auto& future : futures) {
+                                 results.push_back(future.result());
+                               }
 
-    executeBackgroundTasks(
-        executor, nullptr, &MainWindow::handleMasterlistsUpdated);
+                               handleMasterlistsUpdated(results);
+                             })
+                       .onFailed(this, [this](const std::exception& e) {
+                         handleError(e.what());
+                       });
 
+    executeConcurrentBackgroundTasks(tasks, whenAll);
   } catch (const std::exception& e) {
     handleException(e);
   }
@@ -2152,20 +2157,28 @@ void MainWindow::on_actionDiscardSort_triggered() {
 
 void MainWindow::on_actionUpdateMasterlist_triggered() {
   try {
-    handleProgressUpdate(translate("Updating and parsing masterlist..."));
+    handleProgressUpdate(translate("Updating and parsing masterlist…"));
 
     const auto preludeTask = new UpdatePreludeTask(state);
-    connect(preludeTask, &Task::error, this, &MainWindow::handleError);
+    const auto masterlistTask =
+        new UpdateMasterlistTask(state.GetCurrentGame());
 
-    auto masterlistTask = new UpdateMasterlistTask(state.GetCurrentGame());
+    const std::vector<Task*> tasks{preludeTask, masterlistTask};
 
-    connect(masterlistTask, &Task::error, this, &MainWindow::handleError);
+    auto whenAll =
+        whenAllTasks(tasks)
+            .then(this,
+                  [this](const QList<QFuture<QueryResult>> futures) {
+                    auto preludeResult = futures[0].result();
+                    auto masterlistResult = futures[1].result();
 
-    const auto executor =
-        new SequentialTaskExecutor(this, {preludeTask, masterlistTask});
+                    handleMasterlistUpdated({preludeResult, masterlistResult});
+                  })
+            .onFailed(this, [this](const std::exception& e) {
+              handleError(e.what());
+            });
 
-    executeBackgroundTasks(
-        executor, nullptr, &MainWindow::handleMasterlistUpdated);
+    executeConcurrentBackgroundTasks(tasks, whenAll);
   } catch (const std::exception& e) {
     handleException(e);
   }
@@ -2354,7 +2367,7 @@ void MainWindow::on_filtersWidget_overlapFilterChanged(
       return;
     }
 
-    handleProgressUpdate(translate("Identifying overlapping plugins..."));
+    handleProgressUpdate(translate("Identifying overlapping plugins…"));
 
     std::unique_ptr<Query> query = std::make_unique<GetOverlappingPluginsQuery>(
         state.GetCurrentGame(),
@@ -2519,9 +2532,9 @@ void MainWindow::handleStartupGameDataLoaded(QueryResult result) {
   }
 }
 
-void MainWindow::handlePluginsManualSorted(std::vector<QueryResult> results) {
+void MainWindow::handlePluginsManualSorted(QueryResult result) {
   try {
-    const auto loadOrderChanged = handlePluginsSorted(results);
+    const auto loadOrderChanged = handlePluginsSorted(result);
 
     if (!loadOrderChanged) {
       // Perform ambiguous load order check because load order state was
@@ -2533,9 +2546,9 @@ void MainWindow::handlePluginsManualSorted(std::vector<QueryResult> results) {
   }
 }
 
-void MainWindow::handlePluginsAutoSorted(std::vector<QueryResult> results) {
+void MainWindow::handlePluginsAutoSorted(QueryResult result) {
   try {
-    handlePluginsSorted(results);
+    handlePluginsSorted(result);
 
     if (actionApplySort->isVisible()) {
       actionApplySort->trigger();
@@ -2551,6 +2564,10 @@ void MainWindow::handlePluginsAutoSorted(std::vector<QueryResult> results) {
 
 void MainWindow::handleMasterlistUpdated(std::vector<QueryResult> results) {
   try {
+    if (results.empty()) {
+      return;
+    }
+
     const auto wasPreludeUpdated = std::get<bool>(results.at(0));
     const auto wasMasterlistUpdated =
         std::get<MasterlistUpdateResult>(results.at(1)).second;
@@ -2588,6 +2605,11 @@ void MainWindow::handleMasterlistUpdated(std::vector<QueryResult> results) {
 
 void MainWindow::handleMasterlistsUpdated(std::vector<QueryResult> results) {
   try {
+    if (results.empty()) {
+      progressDialog->reset();
+      return;
+    }
+
     // The results are in an unknown order due to parallel task execution.
     bool wasPreludeUpdated{false};
     for (const auto& result : results) {
@@ -2654,6 +2676,8 @@ void MainWindow::handleMasterlistsUpdated(std::vector<QueryResult> results) {
                          state.getSettings().getLanguage());
 
       handleGameDataLoaded(pluginItems);
+    } else {
+      progressDialog->reset();
     }
 
     auto message =
@@ -2755,8 +2779,6 @@ void MainWindow::handleUpdateCheckError(const std::string&) {
     handleException(e);
   }
 }
-
-void MainWindow::handleTaskExecutorFinished() { progressDialog->reset(); }
 
 void MainWindow::handleIconColorChanged() {
   IconFactory::setColours(

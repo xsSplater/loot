@@ -4,6 +4,215 @@ Version History
 
 Only application history is recorded here. A full history of masterlist changes may be viewed by browsing the GitHub repositories.
 
+0.23.1 - 2024-08-25
+===================
+
+Added
+-----
+
+- ``SFBGS004.esm`` is now also written to ``Starfield.ccc``, after
+  ``SFBGS003.esm``.
+- A warning message is now displayed for any Morrowind or Starfield plugin that
+  is inactive and has missing masters, as LOOT is unable to sort Morrowind or
+  Starfield load orders that have missing masters.
+
+Fixed
+-----
+
+- LOOT would show an "Ambiguous load order detected" warning after Starfield was
+  updated to 1.13.61.0 (Starfield's August update), due to its addition of a new
+  official plugin (``SFBGS004.esm``).
+
+Changed
+-------
+
+- An error message is now displayed in the General Information card when sorting
+  fails due to missing masters.
+- A shadow effect has been added to the borders between cards in the main
+  window area to help visually separate different plugins' information.
+- Updated libloot to v0.23.1.
+- Updated the Czech translation.
+- Updated the Brazilian Portuguese translation.
+- Updated the Bulgarian translation.
+- Updated the Korean translation.
+- Updated the Portuguese translation.
+- Updated the Russian translation.
+- Updated the Turkish translation.
+
+0.23.0 - 2024-07-10
+===================
+
+Added
+-----
+
+- Support for medium plugins when Starfield is the current game.
+
+  - Active medium plugins are shown in the plugins sidebar with an index of the
+    form ``FD 01``, where ``01`` is the medium-plugin-specific index.
+  - The General Information card now shows a count of the active medium plugins
+    when Starfield is the current game.
+  - If a medium plugin contains records with FormIDs outside of the valid range
+    for a medium plugin, an error message will be shown on its card.
+  - Medium plugins have an active plugin limit of 256 plugins that is separate
+    to the limits for small (a.k.a. light) and full plugins. If that limit is
+    breached, a warning message will be displayed.
+  - A new "Medium Plugin" icon is displayed in medium plugins' cards.
+
+- A new "Small Plugin" icon is displayed in small plugins' cards when Starfield
+  is the current game.
+- A Turkish translation by Ilker Binzet.
+
+Fixed
+-----
+
+- When checking if a Morrowind plugin was a master file, LOOT incorrectly
+  checked the file extension instead of the plugin header's master flag (via
+  libloot).
+- LOOT was not able to reliably check if two Starfield plugins had overlapping
+  records, which affected the overlapping plugins filter and was partly
+  responsible for LOOT's sorting functionality being disabled for Starfield (via
+  libloot).
+- If a non-master plugin was a master of two master plugins, it would be hoisted
+  to load before the master that loaded second instead of the master that loaded
+  first (via libloot).
+- If more than one plugin needed to be hoisted while reading the load order,
+  some plugins could be moved too late in the load order (via libloot).
+- When getting the load order, the result will now correctly reflect the
+  supported games' ability to hoist master files to load above other master
+  files that depend on them (via libloot).
+
+Changed
+-------
+
+- Sorting has been re-enabled for Starfield.
+- Reading Starfield's load order will now take
+  ``%USERPROFILE%\Documents\My Games\Starfield\Starfield.ccc`` into account if
+  it exists (via libloot).
+- LOOT now writes to
+  ``%USERPROFILE%\Documents\My Games\Starfield\Starfield.ccc`` when it is
+  initialised for Starfield, replacing the contents of the file if it already
+  exists. This is done to ensure the following load order for Starfield's
+  official plugins::
+
+    Starfield.esm
+    Constellation.esm
+    OldMars.esm
+    BlueprintShips-Starfield.esm
+    SFBGS007.esm
+    SFBGS008.esm
+    SFBGS006.esm
+    SFBGS003.esm
+
+- Various updates to match terminology introduced by Starfield's Creation Kit:
+
+  - The "Active Regular Plugins" row in the General Information card has been
+    renamed to "Active Full Plugins".
+  - A few warning messages that referred to non-small, non-medium plugins as
+    "normal" now refer to them as "full".
+  - Light plugins are now referred to as small plugins when Starfield is the
+    current game.
+  - Overlay plugins are now referred to as update plugins.
+
+- Update plugins no longer avoid taking up a load order slot when active, to
+  reflect a change in Starfield's behaviour.
+- Plugins in ``%USERPROFILE%\Documents\My Games\Starfield\Data`` are now ignored
+  unless a plugin of the same name is present in the Starfield install path's
+  ``Data`` folder, to reflect a change in Starfield's behaviour.
+- The "Hide Creation Club plugins" filter is now hidden for all games apart from
+  Skyrim Special Edition and Fallout 4.
+- When updating a game's masterlist, the masterlist and masterlist prelude are
+  now updated in parallel.
+- If LOOT is configured to update a game's masterlist before sorting, it will
+  now sort the load order even if updating the masterlist fails.
+- The plugin card icon displayed for light plugins has been replaced.
+- LOOT's installer can now run without administrative privileges. The first time
+  you install LOOT, the installer will now ask if you want to install it for you
+  only, or for all users. Only the option to install for all users requires
+  administrative privileges.
+
+  If LOOT (v0.8.0 or newer) was already installed using the installer, then the
+  installer will now automatically try to use the same privileges as last time.
+  To avoid that, uninstall LOOT before running the installer.
+
+  If LOOT is installed for only the current user, its default install location
+  is ``%LOCALAPPDATA%\Programs`` instead of ``%ProgramFiles%``, and the
+  installer will write its Registry entries under ``HKEY_CURRENT_USER``
+  instead of under ``HKEY_LOCAL_MACHINE``.
+- LOOT's installer may now be run on the ARM64 version of Windows 11 (though
+  this is untested). Note that the installer is still an x86 application, and
+  LOOT is still an x86-64 application, so running both relies on Windows 11's
+  emulation layer.
+- Updated libloot to v0.23.0.
+- Updated minizip-ng to v4.0.7.
+- Updated Qt to v6.7.2.
+- Updated ValveFileVDF to 1a132f3b0b3cf501bdec03a99cdf009d99fc951c.
+- Updated the Bulgarian translation.
+- Updated the German translation.
+- Updated the Russian translation.
+- Updated the Spanish translation.
+
+Removed
+-------
+
+- LOOT's installer no longer writes to the Registry under
+  ``HKEY_LOCAL_MACHINE\Software\LOOT``.
+
+  If you want to detect LOOT's install path, every installer since LOOT v0.8.0
+  has written it as the value of ``InstallLocation`` under
+  ``Software\Microsoft\Windows\CurrentVersion\Uninstall\{BF634210-A0D4-443F-A657-0DCE38040374}_is1``.
+  That subkey may appear under ``HKEY_CURRENT_USER`` or ``HKEY_LOCAL_MACHINE``,
+  depending on whether LOOT was installed per-user or for all users.
+
+
+0.22.4 - 2024-05-17
+===================
+
+Added
+-----
+
+- Support for Fallout 4 from the Epic Games Store.
+- A config option to disable the warning that is displayed when LOOT detects a
+  game install in a case-insensitive filesystem. The warning remains displayed
+  by default.
+- LOOT will now display an error message for any plugin that is its own master.
+- LOOT will now display an error message for any light plugin installed in a
+  post-Skyrim game that does not support light plugins.
+- The docs now include plugin card icon images where the icons are mentioned.
+
+Fixed
+-----
+
+- Fallout 4 VR is no longer treated as if it supports light plugins.
+- Skyrim VR is no longer treated as if it supports light plugins, unless the ESL
+  Support SKSEVR plugin is installed.
+- LOOT no longer crashes if masterlist update fails to first update the prelude.
+
+Changed
+-------
+
+- Masterlist update and LOOT update network requests now time out after 30
+  seconds.
+- The Flatpak application is now built from source within the Flatpak build
+  environment.
+- Updated Boost to 1.85.0.
+- Updated libloot to v0.22.4.
+- Updated minizip-ng to v4.0.5.
+- Updated Qt to v6.7.0.
+- Updated spdlog to v1.14.1.
+- Updated tomlplusplus to v3.4.0.
+- Updated ValveFileVDF to c8adfc29e62cc980b595e965bedfb239087647ff.
+- Updated zlib to v1.3.1.
+- Updated the Bulgarian translation.
+- Updated the German translation.
+- Updated the Russian translation.
+- Updated the Ukrainian translation.
+
+Removed
+-------
+
+- The Linux binary release archive. Releases are now only available for Linux as
+  a Flatpak application from Flathub.
+
 0.22.3 - 2023-12-06
 ===================
 

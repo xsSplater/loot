@@ -39,12 +39,14 @@
 namespace loot {
 struct PluginItem {
   PluginItem() = default;
-  PluginItem(const PluginInterface& plugin,
+  PluginItem(GameId gameId,
+             const PluginInterface& plugin,
              const gui::Game& game,
              const std::optional<short>& loadOrderIndex,
              const bool isActive,
              std::string language);
 
+  GameId gameId{GameId::tes4};
   std::string name;
   std::optional<short> loadOrderIndex;
   std::optional<uint32_t> crc;
@@ -56,8 +58,9 @@ struct PluginItem {
   bool isDirty{false};
   bool isEmpty{false};
   bool isMaster{false};
+  bool isBlueprintMaster{false};
   bool isLightPlugin{false};
-  bool isOverridePlugin{false};
+  bool isMediumPlugin{false};
   bool loadsArchive{false};
   bool hasUserMetadata{false};
   bool isCreationClubPlugin{false};

@@ -48,7 +48,8 @@ public:
   void setMessageCounts(size_t warnings, size_t errors, size_t total);
 
   void setPluginCounts(size_t activeLight,
-                       size_t activeRegular,
+                       size_t activeMedium,
+                       size_t activeFull,
                        size_t dirty,
                        size_t total);
 
@@ -56,7 +57,12 @@ public:
 
   void setShowSeparateLightPluginCount(bool showCount);
 
+  void setShowSeparateMediumPluginCount(bool showCount);
+
   void refreshMessages();
+
+protected:
+  void paintEvent(QPaintEvent* event);
 
 private:
   static constexpr int PLUGIN_VALUE_COLUMN = 5;
@@ -80,8 +86,10 @@ private:
   QLabel* activeCountValue{new QLabel(this)};
   QLabel* activeLightCountLabel{new QLabel(this)};
   QLabel* activeLightCountValue{new QLabel(this)};
-  QLabel* activeRegularCountLabel{new QLabel(this)};
-  QLabel* activeRegularCountValue{new QLabel(this)};
+  QLabel* activeMediumCountLabel{new QLabel(this)};
+  QLabel* activeMediumCountValue{new QLabel(this)};
+  QLabel* activeFullCountLabel{new QLabel(this)};
+  QLabel* activeFullCountValue{new QLabel(this)};
   QLabel* dirtyCountLabel{new QLabel(this)};
   QLabel* dirtyCountValue{new QLabel(this)};
   QLabel* totalPluginsCountLabel{new QLabel(this)};
@@ -89,10 +97,13 @@ private:
   QGridLayout* gridLayout{new QGridLayout()};
   MessagesWidget* messagesWidget{new MessagesWidget(this)};
   bool showSeparateLightPluginCount{false};
+  bool showSeparateMediumPluginCount{false};
 
   void setupUi();
 
   void translateUi();
+
+  void updatePluginRowsAndColumns();
 };
 }
 

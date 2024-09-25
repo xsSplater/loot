@@ -41,7 +41,8 @@ struct GeneralInformationCounters {
   size_t totalMessages{0};
 
   size_t activeLight{0};
-  size_t activeRegular{0};
+  size_t activeMedium{0};
+  size_t activeFull{0};
   size_t dirty{0};
   size_t totalPlugins{0};
 

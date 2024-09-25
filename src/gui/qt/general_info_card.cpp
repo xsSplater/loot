@@ -53,15 +53,15 @@ void GeneralInfoCard::setMessageCounts(size_t warnings,
 }
 
 void GeneralInfoCard::setPluginCounts(size_t activeLight,
-                                      size_t activeRegular,
+                                      size_t activeMedium,
+                                      size_t activeFull,
                                       size_t dirty,
                                       size_t total) {
-  if (showSeparateLightPluginCount) {
-    activeLightCountValue->setText(QString::number(activeLight));
-    activeRegularCountValue->setText(QString::number(activeRegular));
-  } else {
-    activeCountValue->setText(QString::number(activeLight + activeRegular));
-  }
+  activeLightCountValue->setText(QString::number(activeLight));
+  activeMediumCountValue->setText(QString::number(activeMedium));
+  activeFullCountValue->setText(QString::number(activeFull));
+  activeCountValue->setText(
+      QString::number(activeLight + activeMedium + activeFull));
 
   dirtyCountValue->setText(QString::number(dirty));
   totalPluginsCountValue->setText(QString::number(total));
@@ -79,44 +79,82 @@ void GeneralInfoCard::setGeneralMessages(
 }
 
 void GeneralInfoCard::setShowSeparateLightPluginCount(bool showCount) {
-  auto oldValue = showSeparateLightPluginCount;
+  const auto oldValue = showSeparateLightPluginCount;
   showSeparateLightPluginCount = showCount;
 
-  if (showSeparateLightPluginCount == oldValue) {
-    return;
+  if (showSeparateLightPluginCount != oldValue) {
+    updatePluginRowsAndColumns();
   }
+}
 
-  activeCountLabel->setVisible(!showSeparateLightPluginCount);
-  activeCountValue->setVisible(!showSeparateLightPluginCount);
-  activeRegularCountLabel->setVisible(showSeparateLightPluginCount);
-  activeRegularCountValue->setVisible(showSeparateLightPluginCount);
+void GeneralInfoCard::setShowSeparateMediumPluginCount(bool showCount) {
+  const auto oldValue = showSeparateMediumPluginCount;
+  showSeparateMediumPluginCount = showCount;
+
+  if (showSeparateMediumPluginCount != oldValue) {
+    updatePluginRowsAndColumns();
+  }
+}
+
+void GeneralInfoCard::updatePluginRowsAndColumns() {
+  const auto showSeparateCounts =
+      showSeparateLightPluginCount || showSeparateMediumPluginCount;
+
+  activeCountLabel->setVisible(!showSeparateCounts);
+  activeCountValue->setVisible(!showSeparateCounts);
+  activeFullCountLabel->setVisible(showSeparateCounts);
+  activeFullCountValue->setVisible(showSeparateCounts);
+  activeMediumCountLabel->setVisible(showSeparateMediumPluginCount);
+  activeMediumCountValue->setVisible(showSeparateMediumPluginCount);
   activeLightCountLabel->setVisible(showSeparateLightPluginCount);
   activeLightCountValue->setVisible(showSeparateLightPluginCount);
 
   static constexpr int PLUGIN_LABEL_COLUMN = 4;
 
-  auto dirtyCountRow = showSeparateLightPluginCount ? 2 : 1;
-  auto totalCountRow = dirtyCountRow + 1;
+  auto row = 0;
 
-  if (showSeparateLightPluginCount) {
-    gridLayout->addWidget(activeRegularCountLabel, 0, PLUGIN_LABEL_COLUMN);
-    gridLayout->addWidget(activeRegularCountValue, 0, PLUGIN_VALUE_COLUMN);
-    gridLayout->addWidget(activeLightCountLabel, 1, PLUGIN_LABEL_COLUMN);
-    gridLayout->addWidget(activeLightCountValue, 1, PLUGIN_VALUE_COLUMN);
+  if (showSeparateCounts) {
+    gridLayout->addWidget(activeFullCountLabel, row, PLUGIN_LABEL_COLUMN);
+    gridLayout->addWidget(activeFullCountValue, row, PLUGIN_VALUE_COLUMN);
+    row += 1;
+
+    if (showSeparateMediumPluginCount) {
+      gridLayout->addWidget(activeMediumCountLabel, row, PLUGIN_LABEL_COLUMN);
+      gridLayout->addWidget(activeMediumCountValue, row, PLUGIN_VALUE_COLUMN);
+      row += 1;
+    }
+
+    if (showSeparateLightPluginCount) {
+      gridLayout->addWidget(activeLightCountLabel, row, PLUGIN_LABEL_COLUMN);
+      gridLayout->addWidget(activeLightCountValue, row, PLUGIN_VALUE_COLUMN);
+      row += 1;
+    }
   } else {
-    gridLayout->addWidget(activeCountLabel, 0, PLUGIN_LABEL_COLUMN);
-    gridLayout->addWidget(activeCountValue, 0, PLUGIN_VALUE_COLUMN);
+    gridLayout->addWidget(activeCountLabel, row, PLUGIN_LABEL_COLUMN);
+    gridLayout->addWidget(activeCountValue, row, PLUGIN_VALUE_COLUMN);
+    row += 1;
   }
 
-  gridLayout->addWidget(dirtyCountLabel, dirtyCountRow, PLUGIN_LABEL_COLUMN);
-  gridLayout->addWidget(dirtyCountValue, dirtyCountRow, PLUGIN_VALUE_COLUMN);
-  gridLayout->addWidget(
-      totalPluginsCountLabel, totalCountRow, PLUGIN_LABEL_COLUMN);
-  gridLayout->addWidget(
-      totalPluginsCountValue, totalCountRow, PLUGIN_VALUE_COLUMN);
+  gridLayout->addWidget(dirtyCountLabel, row, PLUGIN_LABEL_COLUMN);
+  gridLayout->addWidget(dirtyCountValue, row, PLUGIN_VALUE_COLUMN);
+  row += 1;
+
+  gridLayout->addWidget(totalPluginsCountLabel, row, PLUGIN_LABEL_COLUMN);
+  gridLayout->addWidget(totalPluginsCountValue, row, PLUGIN_VALUE_COLUMN);
+
+  const auto activeLightCountText = showSeparateMediumPluginCount
+                                        ? translate("Active Small Plugins")
+                                        : translate("Active Light Plugins");
+  activeLightCountLabel->setText(activeLightCountText);
 }
 
 void GeneralInfoCard::refreshMessages() { messagesWidget->refresh(); }
+
+void GeneralInfoCard::paintEvent(QPaintEvent* event) {
+  QFrame::paintEvent(event);
+
+  PaintCardBorderShadows(this, false);
+}
 
 void GeneralInfoCard::setupUi() {
   static constexpr int TABLE_COLUMN_SPACING = 16;
@@ -158,9 +196,7 @@ void GeneralInfoCard::setupUi() {
   gridLayout->addWidget(totalMessagesCountLabel, 2, MESSAGE_LABEL_COLUMN);
   gridLayout->addWidget(totalMessagesCountValue, 2, MESSAGE_VALUE_COLUMN);
 
-  // Set showSeparateLightPluginCount to true so that it changes from its
-  // default and the plugin count cells get initialised.
-  setShowSeparateLightPluginCount(true);
+  updatePluginRowsAndColumns();
 
   generalInfoLayout->addWidget(headingLabel);
   generalInfoLayout->addLayout(gridLayout);
@@ -185,7 +221,8 @@ void GeneralInfoCard::translateUi() {
   totalMessagesCountLabel->setText(translate("Total Messages"));
 
   activeCountLabel->setText(translate("Active Plugins"));
-  activeRegularCountLabel->setText(translate("Active Regular Plugins"));
+  activeFullCountLabel->setText(translate("Active Full Plugins"));
+  activeMediumCountLabel->setText(translate("Active Medium Plugins"));
   activeLightCountLabel->setText(translate("Active Light Plugins"));
   dirtyCountLabel->setText(translate("Dirty Plugins"));
   totalPluginsCountLabel->setText(translate("Total Plugins"));

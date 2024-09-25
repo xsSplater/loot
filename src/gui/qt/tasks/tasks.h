@@ -26,6 +26,7 @@
 #ifndef LOOT_GUI_QT_TASKS_TASKS
 #define LOOT_GUI_QT_TASKS_TASKS
 
+#include <QtCore/QFuture>
 #include <QtCore/QMetaType>
 #include <QtCore/QString>
 #include <QtCore/QThread>
@@ -64,62 +65,17 @@ private:
   std::unique_ptr<Query> query;
 };
 
-class TaskExecutor : public QObject {
-  Q_OBJECT
-public:
-  TaskExecutor(QObject *parent);
+QFuture<QueryResult> executeBackgroundQuery(std::unique_ptr<Query> query);
 
-signals:
-  void start();
-  void finished(std::vector<QueryResult> results);
-};
+QFuture<QueryResult> taskFuture(Task *task);
 
-class SequentialTaskExecutor : public TaskExecutor {
-  Q_OBJECT
-public:
-  SequentialTaskExecutor(QObject *parent, std::vector<Task *> tasks);
-  SequentialTaskExecutor(const TaskExecutor &) = delete;
-  SequentialTaskExecutor(TaskExecutor &&) = delete;
-  ~SequentialTaskExecutor();
+QFuture<QList<QFuture<QueryResult>>> whenAllTasks(
+    const std::vector<Task *> &tasks);
 
-  SequentialTaskExecutor &operator=(const SequentialTaskExecutor &) = delete;
-  SequentialTaskExecutor &operator=(SequentialTaskExecutor &&) = delete;
+void executeConcurrentBackgroundTasks(const std::vector<Task *> &tasks,
+                                      QFuture<void> whenAll);
 
-private:
-  QThread workerThread;
-  std::vector<Task *> tasks;
-  size_t currentTask{0};
-
-  std::vector<QueryResult> taskResults;
-
-private slots:
-  void onTaskFinished(QueryResult result);
-  void onTaskError();
-  void onWorkerThreadFinished();
-};
-
-class ParallelTaskExecutor : public TaskExecutor {
-  Q_OBJECT
-public:
-  ParallelTaskExecutor(QObject *parent, std::vector<Task *> tasks);
-  ParallelTaskExecutor(const TaskExecutor &) = delete;
-  ParallelTaskExecutor(TaskExecutor &&) = delete;
-  ~ParallelTaskExecutor();
-
-  ParallelTaskExecutor &operator=(const ParallelTaskExecutor &) = delete;
-  ParallelTaskExecutor &operator=(ParallelTaskExecutor &&) = delete;
-
-private:
-  std::recursive_mutex mutex;
-  std::vector<Task *> tasks;
-  std::vector<QueryResult> taskResults;
-  std::vector<QThread *> workerThreads;
-
-private slots:
-  void onTaskFinished(QueryResult result);
-  void onTaskError();
-  void onWorkerThreadFinished();
-};
+QFuture<QueryResult> executeBackgroundTask(Task *task);
 }
 
 #endif

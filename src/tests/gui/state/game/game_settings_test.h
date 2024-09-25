@@ -31,24 +31,6 @@ along with LOOT.  If not, see
 
 namespace loot {
 namespace test {
-class SupportsLightPluginsTest : public ::testing::TestWithParam<GameType> {};
-
-INSTANTIATE_TEST_SUITE_P(,
-                         SupportsLightPluginsTest,
-                         ::testing::ValuesIn(ALL_GAME_TYPES));
-
-TEST_P(SupportsLightPluginsTest,
-       shouldReturnTrueForOnlySkyrimSEAndVRAndFallout4AndVR) {
-  const auto result = SupportsLightPlugins(GetParam());
-  if (GetParam() == GameType::tes5se || GetParam() == GameType::tes5vr ||
-      GetParam() == GameType::fo4 || GetParam() == GameType::fo4vr ||
-      GetParam() == GameType::starfield) {
-    EXPECT_TRUE(result);
-  } else {
-    EXPECT_FALSE(result);
-  }
-}
-
 class ShouldAllowRedatingTest : public ::testing::TestWithParam<GameType> {};
 
 INSTANTIATE_TEST_SUITE_P(,
@@ -72,7 +54,7 @@ protected:
   GameSettings settings_;
 };
 
-// Pass an empty first argument, as it's a prefix for the test instantation,
+// Pass an empty first argument, as it's a prefix for the test instantiation,
 // but we only have the one so no prefix is necessary.
 // Just test with one game because if it works for one it will work for them
 // all.
